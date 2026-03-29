@@ -105,7 +105,7 @@ jobs:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
           VONAGE_APPLICATION_ID: ${{ secrets.VONAGE_APPLICATION_ID }}
-          VONAGE_PRIVATE_KEY_PATH: ${{ secrets.VONAGE_PRIVATE_KEY_PATH }}
+          VONAGE_PRIVATE_KEY: ${{ secrets.VONAGE_PRIVATE_KEY }}
           DAILY_API_KEY: ${{ secrets.DAILY_API_KEY }}
         run: |
           FAILED=""
