@@ -147,11 +147,42 @@ Search across these categories. For each, assess: does Deepgram have an existing
 - Make.com (Integromat) custom app
 - Python script — auto-caption a folder of podcast MP3s
 
-Use web search and WebFetch to verify that an integration is real and useful:
+Before researching external integrations, search Kapa to understand the current breadth
+of Deepgram's own docs — this reveals which features are well-documented (good candidates
+for examples) and which are sparse (opportunity to fill the gap):
+
+```bash
+kapa_search() {
+  local QUERY="$1"; local LIMIT="${2:-5}"
+  curl -s -X POST \
+    "https://api.kapa.ai/query/v1/projects/${KAPA_PROJECT_ID}/retrieval/" \
+    -H "X-API-KEY: ${KAPA_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\": $(echo "$QUERY" | jq -Rs .), \"limit\": $LIMIT}" \
+  | jq -r '
+    .records // .chunks // .results // . |
+    if type == "array" then
+      .[] | "── \(.source_url // .url // "?")\n\(.content // .text // .chunk // "")\n"
+    else tojson end'
+}
+
+# Survey Deepgram's current integration landscape
+kapa_search "Twilio integration speech-to-text"
+kapa_search "LiveKit Pipecat voice agent"
+kapa_search "LangChain Vercel AI SDK integration"
+kapa_search "React Native Flutter mobile SDK"
+kapa_search "Discord Slack bot transcription"
+kapa_search "Node.js getting started example"
+kapa_search "Python getting started example"
+```
+
+If Kapa returns detailed docs and working examples for a topic, that integration is
+less urgent. If results are thin or absent, that's a strong signal it needs an example.
+
+Also use web search and WebFetch to verify that external integrations are real and popular:
 ```bash
 # Check npm / PyPI for relevant packages
 # Check GitHub for existing examples or community projects
-# Check Deepgram docs for existing guides
 ```
 
 ## Step 3 — Decide what to build

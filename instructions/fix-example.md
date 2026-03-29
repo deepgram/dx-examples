@@ -74,7 +74,38 @@ Test assertion fails, wrong output, TypeError, AttributeError, etc. — code bug
 ### E. Review feedback
 `<!-- fix-request` block in comments — the review agent found issues.
 
-## Step 5 — Investigate root cause
+## Step 5 — Search Kapa for current correct usage
+
+Before reading the source code, check whether the failure might be caused by an API or
+SDK change. Kapa returns up-to-date docs — if the example was written against an old
+version, the fix is usually to update to the current calling convention.
+
+```bash
+kapa_search() {
+  local QUERY="$1"; local LIMIT="${2:-5}"
+  curl -s -X POST \
+    "https://api.kapa.ai/query/v1/projects/${KAPA_PROJECT_ID}/retrieval/" \
+    -H "X-API-KEY: ${KAPA_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\": $(echo "$QUERY" | jq -Rs .), \"limit\": $LIMIT}" \
+  | jq -r '
+    .records // .chunks // .results // . |
+    if type == "array" then
+      .[] | "── \(.source_url // .url // "?")\n\(.content // .text // .chunk // "")\n"
+    else tojson end'
+}
+
+# Tailor these queries to the actual failure — examples:
+kapa_search "SDK method names response shape result error"
+kapa_search "listen prerecorded transcribeUrl Node.js"
+kapa_search "createClient options authentication"
+kapa_search "API error codes 401 402 400"
+```
+
+Use the Kapa results to confirm what the current correct API looks like before
+making any changes to the code.
+
+## Step 6 — Investigate root cause
 
 Read every relevant file before making any changes:
 

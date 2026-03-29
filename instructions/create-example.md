@@ -45,17 +45,59 @@ echo "Next number: $PADDED"
 
 ## Step 3 — Research the integration
 
-Before writing any code:
+Before writing any code, do all of the following:
 
-1. Fetch the integration's documentation using WebFetch or WebSearch
-2. Find an existing SDK or package for the language chosen
-3. Understand how audio/voice flows through the integration (what format, what protocol)
-4. Identify which Deepgram features make sense here (STT, TTS, agents, intelligence)
-5. Look at any existing Deepgram starter repos for this language to understand conventions, and identify which starters are most relevant to link from the example README:
-   ```bash
-   gh search repos --owner deepgram-starters --limit 30
-   # e.g. for Node.js STT look for: deepgram-starters/live-node, deepgram-starters/prerecorded-node
-   ```
+### 3a. Search Deepgram docs with Kapa
+
+Read `instructions/kapa-search.md` for the full helper function. Then search for every
+Deepgram feature you'll use in this example:
+
+```bash
+# Define the helper (paste into bash before using)
+kapa_search() {
+  local QUERY="$1"; local LIMIT="${2:-5}"
+  curl -s -X POST \
+    "https://api.kapa.ai/query/v1/projects/${KAPA_PROJECT_ID}/retrieval/" \
+    -H "X-API-KEY: ${KAPA_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\": $(echo "$QUERY" | jq -Rs .), \"limit\": $LIMIT}" \
+  | jq -r '
+    .records // .chunks // .results // . |
+    if type == "array" then
+      .[] | "── \(.source_url // .url // "?")\n\(.content // .text // .chunk // "")\n"
+    else tojson end'
+}
+
+# Search for the specific API/SDK methods you'll use — tailor these to the integration
+kapa_search "pre-recorded transcription options parameters"  # if using STT batch
+kapa_search "live streaming WebSocket Node.js SDK"           # if using STT live
+kapa_search "text-to-speech speak synthesize options"        # if using TTS
+kapa_search "voice agent WebSocket protocol messages"        # if using agents
+kapa_search "audio intelligence summarization sentiment"     # if using intelligence
+```
+
+**Use the search results to verify:** method names, option key spellings, response structure,
+and any gotchas called out in the docs. Write these findings into your code comments.
+
+### 3b. Research the integration platform
+
+```bash
+# Fetch the partner/ecosystem documentation
+# WebFetch the integration's quickstart or audio/voice docs page
+# Find an existing SDK or package for the language chosen
+```
+
+Understand: how does audio flow through this integration? What format? What protocol?
+WebSocket? HTTP chunked? Webhook? This determines which Deepgram API to use.
+
+### 3c. Find relevant Deepgram starters to link
+
+```bash
+gh search repos --owner deepgram-starters --limit 30
+# e.g. for Node.js STT: deepgram-starters/live-node, deepgram-starters/prerecorded-node
+```
+
+Identify which starters are closest to what you're building — link them from the README.
 
 ## Step 4 — Plan the example
 

@@ -235,6 +235,9 @@ EOF
       - name: Run fix agent on failures
         if: steps.collect.outputs.has_failures == 'true'
         uses: anthropics/claude-code-action@beta
+        env:
+          KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
+          KAPA_PROJECT_ID: 1908afc6-c134-4c6f-a684-ed7d8ce91759
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
