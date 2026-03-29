@@ -33,10 +33,9 @@ from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.services.openai.llm import OpenAILLMService
-from pipecat.transports.local.audio import LocalAudioTransport
-
-# Daily.co transport is imported lazily below (only when --daily is used)
-# because it pulls in daily-python which has heavy native dependencies.
+# Local and Daily transports are imported lazily inside their respective
+# functions because they pull in native dependencies (pyaudio, daily-python)
+# that are not available in all environments (e.g. CI).
 
 
 async def run_local_pipeline():
@@ -103,6 +102,13 @@ async def run_local_pipeline():
     # the user starts and stops speaking. This drives turn-taking — without
     # it, the pipeline wouldn't know when to stop listening and start
     # generating a response. Loading takes ~200 ms on first call.
+    try:
+        from pipecat.transports.local.audio import LocalAudioTransport
+    except ImportError:
+        print("Error: Local audio transport not installed.", file=sys.stderr)
+        print("Run: pip install 'pipecat-ai[local]'", file=sys.stderr)
+        sys.exit(1)
+
     vad = SileroVADAnalyzer()
 
     transport = LocalAudioTransport(vad_analyzer=vad)
