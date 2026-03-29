@@ -1,0 +1,18 @@
+{
+  "name": "deepgram-slack-transcribe-bot-node",
+  "version": "1.0.0",
+  "description": "Slack bot that auto-transcribes audio file attachments using Deepgram nova-3",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "^5.0.0",
+    "@slack/bolt": "^4.1.0",
+    "dotenv": "^16.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
