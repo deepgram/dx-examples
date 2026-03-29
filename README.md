@@ -33,6 +33,7 @@ If an example requires external credentials that aren't configured as repository
 | [090](examples/090-react-native-live-transcription-js/) | React Native Live Transcription | Node.js | React Native | ✅ passing |
 | [100](examples/100-fastapi-audio-transcription-python/) | FastAPI Audio Transcription API | Python | FastAPI | ✅ passing |
 | [110](examples/110-cloudflare-worker-transcription-js/) | Cloudflare Worker — Edge Audio Transcription | Node.js | Cloudflare Workers | ✅ passing |
+| [120](examples/120-slack-transcribe-bot-node/) | Slack Bot — Auto-Transcribe Audio Messages with Deepgram | Node.js | Slack | ⏳ needs credentials |
 <!-- examples-table-end -->
 
 ## Directory structure
