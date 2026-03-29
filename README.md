@@ -25,6 +25,11 @@ If an example requires external credentials that aren't configured as repository
 | [010](examples/010-getting-started-node/) | Getting Started — Transcribe a URL with Node.js | Node.js | STT | Deepgram SDK |
 | [020](examples/020-twilio-media-streams-node/) | Twilio Media Streams — Real-Time Call Transcription | Node.js | STT | Twilio Media Streams |
 | [030](examples/030-livekit-agents-python/) | LiveKit Agents — Voice Assistant with Deepgram STT | Python | STT, Agents | LiveKit Agents |
+| [040](examples/040-langchain-stt-tool-python/) | LangChain STT Tool — Transcribe Audio in AI Pipelines | Python | STT | LangChain |
+| [050](examples/050-vercel-ai-sdk-node/) | Vercel AI SDK — Transcribe Audio and Generate Speech with Deepgram | Node.js | STT, TTS | Vercel AI SDK |
+| [060](examples/060-discord-bot-node/) | Discord Bot — Transcribe Audio Attachments with Deepgram | Node.js | STT | Discord |
+| [070](examples/070-vonage-voice-websocket-node/) | Vonage Voice API — Real-Time Call Transcription | Node.js | STT | Vonage Voice API |
+| [080](examples/080-pipecat-voice-pipeline-python/) | Pipecat Voice Pipeline — Conversational Bot with Deepgram STT & TTS | Python | STT, TTS | Pipecat |
 <!-- examples-table-end -->
 
 ## Directory structure
