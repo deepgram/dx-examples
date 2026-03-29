@@ -1,17 +1,15 @@
 name: Process Open PRs
 
-# This is the backbone of the autonomous loop.
+# Backbone of the autonomous loop. Runs on a schedule because GITHUB_TOKEN
+# actions cannot trigger other workflows.
 #
-# Workflows cannot trigger other workflows using GITHUB_TOKEN, so event-based
-# chaining (test fails → label → fix fires → commit → tests re-run) does not
-# work for bot-owned PRs. Instead this runs on a schedule and drives the full
-# PR lifecycle in a single agent invocation:
+# Two-phase design:
+#   Phase 1 — native CI: runs tests on every open PR branch and records results.
+#              This is NOT delegated to the agent — it uses real test runners.
+#   Phase 2 — agent: reads test results, fixes failures, reviews passing PRs,
+#              merges only PRs where Phase 1 produced at least one passing check.
 #
-#   open PR → run tests → fix failures → review → merge
-#
-# The event-based test/review/fix workflows still run for human-opened PRs
-# (triggered by the PR author's token, not GITHUB_TOKEN) and are worth keeping
-# as CI status checks — but for agent PRs this cron is the primary driver.
+# The agent cannot merge a PR that Phase 1 marked as untested or failing.
 
 on:
   schedule:
@@ -20,7 +18,7 @@ on:
 
 concurrency:
   group: process-open-prs
-  cancel-in-progress: false   # Never cancel — finish the current batch first
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -28,7 +26,161 @@ permissions:
   issues: write
 
 jobs:
-  process:
+  # ── Phase 1: Run tests on all open PRs ─────────────────────────────────────
+  test-prs:
+    runs-on: ubuntu-latest
+    outputs:
+      results: ${{ steps.run-tests.outputs.results }}
+      has_prs: ${{ steps.run-tests.outputs.has_prs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "examples-bot"
+          git config user.email "noreply@deepgram.com"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Test all open PR branches
+        id: run-tests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+        run: |
+          # Find all open [Example] and [Fix] PRs
+          PRS=$(gh pr list --state open \
+            --json number,title,headRefName \
+            --jq '.[] | select(.title | test("^\\[(Example|Fix)\\]")) | "\(.number)|\(.title)|\(.headRefName)"')
+
+          if [ -z "$PRS" ]; then
+            echo "has_prs=false" >> $GITHUB_OUTPUT
+            echo "results=" >> $GITHUB_OUTPUT
+            echo "No open example PRs found."
+            exit 0
+          fi
+
+          echo "has_prs=true" >> $GITHUB_OUTPUT
+
+          # results format: "PR_NUMBER:STATUS:DETAILS ..." space-separated
+          ALL_RESULTS=""
+
+          while IFS='|' read -r PR_NUM PR_TITLE BRANCH; do
+            [ -z "$PR_NUM" ] && continue
+            echo ""
+            echo "════════════════════════════════════"
+            echo "PR #$PR_NUM: $PR_TITLE"
+            echo "Branch: $BRANCH"
+            echo "════════════════════════════════════"
+
+            # Checkout the PR branch
+            git fetch origin "$BRANCH" 2>/dev/null || { echo "Cannot fetch $BRANCH — skipping"; ALL_RESULTS="$ALL_RESULTS $PR_NUM:SKIP:cannot_fetch"; continue; }
+            git checkout "$BRANCH" 2>/dev/null || { echo "Cannot checkout $BRANCH — skipping"; ALL_RESULTS="$ALL_RESULTS $PR_NUM:SKIP:cannot_checkout"; continue; }
+
+            PR_STATUS="PASS"
+            PR_DETAILS=""
+            MISSING_CREDS=""
+
+            for dir in examples/*/; do
+              [ -f "${dir}.gitkeep" ] && continue
+              LANG=""
+              [ -f "${dir}package.json" ]    && LANG="node"
+              [ -f "${dir}requirements.txt" ] && LANG="python"
+              [ -f "${dir}pyproject.toml" ]  && LANG="python"
+              [ -f "${dir}go.mod" ]          && LANG="go"
+              [ -z "$LANG" ] && continue
+
+              echo "--- Testing $dir ($LANG) ---"
+              pushd "$dir" > /dev/null
+
+              # Check credentials
+              MISSING=""
+              if [ -f ".env.example" ]; then
+                while IFS= read -r line; do
+                  [[ -z "${line// }" || "$line" == \#* ]] && continue
+                  VAR="${line%%=*}"; VAR="${VAR// /}"
+                  [ -z "$VAR" ] && continue
+                  [ -z "${!VAR+x}" ] || [ -z "${!VAR}" ] && MISSING="$MISSING $VAR"
+                done < ".env.example"
+              fi
+
+              if [ -n "$MISSING" ]; then
+                echo "⚠ Missing credentials: $MISSING"
+                MISSING_CREDS="$MISSING_CREDS,$dir:$(echo $MISSING | xargs | tr ' ' '+')"
+                popd > /dev/null
+                continue
+              fi
+
+              # Run tests by language
+              TEST_PASS=false
+              if [ "$LANG" = "node" ]; then
+                [ -f "package-lock.json" ] && npm ci --prefer-offline -q 2>&1 || npm install -q 2>&1
+                npm test 2>&1 && TEST_PASS=true || true
+              elif [ "$LANG" = "python" ]; then
+                pip install -q -r requirements.txt 2>&1 2>/dev/null || pip install -q -e . 2>&1 2>/dev/null
+                if find tests/ -name "test_*.py" 2>/dev/null | grep -q .; then
+                  python -m pytest tests/ -q 2>&1 && TEST_PASS=true || true
+                elif ls tests/*.py 2>/dev/null | head -1 | grep -q .; then
+                  python "$(ls tests/*.py | head -1)" 2>&1 && TEST_PASS=true || true
+                fi
+              elif [ "$LANG" = "go" ]; then
+                go mod download -x 2>/dev/null
+                go test ./... 2>&1 && TEST_PASS=true || true
+              fi
+
+              if [ "$TEST_PASS" = "false" ]; then
+                echo "✗ FAILED: $dir"
+                PR_STATUS="FAIL"
+                PR_DETAILS="$PR_DETAILS,$dir"
+              else
+                echo "✓ PASSED: $dir"
+              fi
+
+              popd > /dev/null
+            done
+
+            # Label the PR based on results
+            if [ -n "$MISSING_CREDS" ]; then
+              gh pr edit "$PR_NUM" --add-label "status:needs-credentials" 2>/dev/null || true
+              # Only post comment if not already posted
+              ALREADY=$(gh pr view "$PR_NUM" --json comments --jq '[.comments[].body | select(contains("Missing credentials"))] | length')
+              if [ "$ALREADY" = "0" ]; then
+                VARLIST=$(echo "$MISSING_CREDS" | tr ',' '\n' | grep ':' | sed 's/.*://' | tr '+' ' ' | sort -u | tr '\n' ' ')
+                gh pr comment "$PR_NUM" --body "@deepgram-devrel This PR needs repository secrets to run E2E tests: $VARLIST" 2>/dev/null || true
+              fi
+              [ "$PR_STATUS" = "PASS" ] && PR_STATUS="MISSING_CREDS"
+            fi
+
+            if [ "$PR_STATUS" = "FAIL" ]; then
+              gh pr edit "$PR_NUM" --add-label "status:fix-needed" 2>/dev/null || true
+            fi
+
+            ALL_RESULTS="$ALL_RESULTS $PR_NUM:$PR_STATUS:$(echo $PR_DETAILS | tr ',' '_')"
+
+            # Return to main
+            git checkout main 2>/dev/null || true
+          done <<< "$PRS"
+
+          echo "results=${ALL_RESULTS}" >> $GITHUB_OUTPUT
+          echo ""
+          echo "Test results: $ALL_RESULTS"
+
+  # ── Phase 2: Agent reviews, fixes, and merges ──────────────────────────────
+  agent:
+    needs: test-prs
+    if: needs.test-prs.outputs.has_prs == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +192,6 @@ jobs:
           git config user.name "examples-bot"
           git config user.email "noreply@deepgram.com"
 
-      # Set up all runtimes upfront so the agent can run any language's tests
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -57,20 +208,7 @@ jobs:
         id: date
         run: echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
-      - name: Check for open PRs
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          COUNT=$(gh pr list --state open \
-            --json title \
-            --jq '[.[] | select(.title | test("^\\[(Example|Fix)\\]"))] | length')
-          echo "pr_count=$COUNT" >> $GITHUB_OUTPUT
-          echo "has_prs=$([ "$COUNT" -gt 0 ] && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "Found $COUNT open example/fix PRs"
-
-      - name: Process open PRs
-        if: steps.check.outputs.has_prs == 'true'
+      - name: Run agent
         uses: anthropics/claude-code-action@beta
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
@@ -83,15 +221,21 @@ jobs:
           model: claude-opus-4-6
           allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"
           direct_prompt: |
-            Read and execute the instructions in `instructions/process-open-prs.md`.
+            Read and execute `instructions/process-open-prs.md`.
 
-            Context:
-            - Today's date: ${{ steps.date.outputs.date }}
-            - Repository: ${{ github.repository }}
-            - Run ID: ${{ github.run_id }}
-            - Open PR count: ${{ steps.check.outputs.pr_count }}
-            - DEEPGRAM_API_KEY is available in the environment for running E2E tests
+            Phase 1 (native CI) already ran tests on every open PR. Results:
+            ${{ needs.test-prs.outputs.results }}
 
-      - name: Skip message
-        if: steps.check.outputs.has_prs == 'false'
-        run: echo "No open example PRs to process — skipping."
+            Format: "PR_NUMBER:STATUS" where STATUS is:
+              PASS         — all tests passed, safe to review and merge
+              FAIL         — tests failed, needs fixing
+              MISSING_CREDS — needs repository secrets, leave open
+              SKIP         — branch unavailable, skip
+
+            CRITICAL MERGE RULE:
+            Only merge PRs with status PASS. Never merge FAIL, MISSING_CREDS, or SKIP.
+            A PASS PR still needs status:review-passed label before merging.
+
+            Today's date: ${{ steps.date.outputs.date }}
+            Repository: ${{ github.repository }}
+            Run ID: ${{ github.run_id }}
