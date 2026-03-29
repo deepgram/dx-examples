@@ -93,8 +93,22 @@ jobs:
             PR_DETAILS=""
             MISSING_CREDS=""
 
-            for dir in examples/*/; do
-              [ -f "${dir}.gitkeep" ] && continue
+            # Only test examples that are NEW or CHANGED in this PR (not all of examples/)
+            # This avoids reporting missing Twilio/LiveKit creds for existing examples
+            NEW_DIRS=$(git diff origin/main..."$BRANCH" --name-only 2>/dev/null \
+              | grep '^examples/' | cut -d/ -f1-2 | sort -u | grep -v '^\s*$')
+
+            if [ -z "$NEW_DIRS" ]; then
+              echo "No changed example directories found — skipping tests"
+              ALL_RESULTS="$ALL_RESULTS $PR_NUM:SKIP:no_changes"
+              git checkout main 2>/dev/null || true
+              continue
+            fi
+
+            echo "Changed examples: $NEW_DIRS"
+
+            for dir in $NEW_DIRS; do
+              [ ! -d "$dir" ] && continue
               LANG=""
               [ -f "${dir}package.json" ]    && LANG="node"
               [ -f "${dir}requirements.txt" ] && LANG="python"
