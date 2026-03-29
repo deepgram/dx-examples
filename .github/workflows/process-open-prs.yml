@@ -24,6 +24,8 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  checks: write
+  statuses: write
 
 jobs:
   # ── Phase 1: Run tests on all open PRs ─────────────────────────────────────
@@ -194,6 +196,31 @@ jobs:
             fi
 
             ALL_RESULTS="$ALL_RESULTS $PR_NUM:$PR_STATUS:$(echo $PR_DETAILS | tr ',' '_')"
+
+            # Post a commit status so branch protection can gate on test results.
+            # Uses the same context name as test-pr-example.yml so one branch
+            # protection rule covers both human PRs and bot PRs.
+            SHA=$(gh pr view "$PR_NUM" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+            if [ -n "$SHA" ]; then
+              case "$PR_STATUS" in
+                PASS)
+                  STATE="success"; DESC="All tests passed" ;;
+                MISSING_CREDS)
+                  STATE="failure"; DESC="Missing credentials — tests could not run" ;;
+                FAIL)
+                  STATE="failure"; DESC="Tests failed" ;;
+                *)
+                  STATE="pending"; DESC="Tests skipped or branch unavailable" ;;
+              esac
+              gh api "repos/${{ github.repository }}/statuses/$SHA" \
+                --method POST \
+                -f state="$STATE" \
+                -f context="test-pr-example" \
+                -f description="$DESC" \
+                -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                2>/dev/null || true
+              echo "  Posted commit status: $STATE ($DESC)"
+            fi
 
             # Return to main
             git checkout main 2>/dev/null || true
