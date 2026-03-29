@@ -9,21 +9,13 @@ const twilio = require('twilio');
 
 const PORT = process.env.PORT || 3000;
 
-// Twilio sends μ-law 8 kHz mono audio via Media Streams.  Deepgram can ingest
-// mulaw natively — no transcoding step needed.  We just tell Deepgram the
-// encoding up front so it skips the usual content-type detection.
 const DEEPGRAM_LIVE_OPTIONS = {
-  model: 'nova-3-phonecall',
+  model: 'nova-3',
   encoding: 'mulaw',
   sample_rate: 8000,
   channels: 1,
   smart_format: true,
-  // interim_results gives fast, partial transcripts while the speaker is still
-  // talking.  Set to false if you only want final, stable results.
   interim_results: true,
-  // utterance_end_ms fires an UtteranceEnd event when Deepgram detects silence.
-  // 1000 ms is a good default for phone conversations — short enough to feel
-  // real-time, long enough to avoid splitting mid-sentence pauses.
   utterance_end_ms: 1000,
 };
 
@@ -37,13 +29,8 @@ function createApp() {
     process.exit(1);
   }
 
-  // SDK v5: DeepgramClient replaces the old createClient() from v3/v4.
   const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
 
-  // Twilio hits this endpoint when a call comes in.  The TwiML response tells
-  // Twilio to open a bidirectional Media Stream back to our /media WebSocket.
-  // <Connect><Stream> blocks further TwiML until the WebSocket closes, which
-  // keeps the call alive for as long as we need.
   app.post('/voice', (req, res) => {
     const host = req.headers.host;
     const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'wss' : 'ws';
@@ -61,18 +48,17 @@ function createApp() {
     console.log(`[voice] New call → streaming to ${streamUrl}`);
   });
 
-  // Each phone call opens a separate WebSocket here.  Twilio sends JSON
-  // messages with event types: connected, start, media, stop.
   app.ws('/media', async (twilioWs) => {
     let dgConnection = null;
     let streamSid = null;
 
     console.log('[media] Twilio WebSocket connected');
 
-    // SDK v5: listen.v1.createConnection() is async and returns a socket
-    // object that is NOT yet connected. Call .connect() to open the WebSocket.
-    // Replaces the old synchronous listen.v1.live() from earlier SDK versions.
-    dgConnection = await deepgram.listen.v1.createConnection(DEEPGRAM_LIVE_OPTIONS);
+    const socket = await deepgram.listen.v1.connect({
+      ...DEEPGRAM_LIVE_OPTIONS,
+      Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
+    });
+    dgConnection = socket;
 
     dgConnection.on('open', () => {
       console.log('[deepgram] Connection opened');
@@ -86,14 +72,19 @@ function createApp() {
       console.log('[deepgram] Connection closed');
     });
 
-    // SDK v5 pre-parses the JSON — msg arrives as an object, no JSON.parse needed.
-    dgConnection.on('message', (data) => {
-      const transcript = data?.channel?.alternatives?.[0]?.transcript;
-      if (transcript) {
-        const tag = data.is_final ? 'final' : 'interim';
-        console.log(`[${tag}] ${transcript}`);
+    dgConnection.on('message', (msg) => {
+      try {
+        const data = typeof msg === 'string' ? JSON.parse(msg) : msg;
+        const transcript = data?.channel?.alternatives?.[0]?.transcript;
+        if (transcript) {
+          const tag = data.is_final ? 'final' : 'interim';
+          console.log(`[${tag}] ${transcript}`);
+        }
+      } catch {
       }
     });
+
+    dgConnection.connect();
 
     twilioWs.on('message', (raw) => {
       try {
@@ -101,22 +92,15 @@ function createApp() {
 
         switch (message.event) {
           case 'connected':
-            // First message after WebSocket handshake — protocol version info.
             console.log('[twilio] Stream connected');
             break;
 
           case 'start':
-            // Contains stream metadata: accountSid, callSid, mediaFormat.
-            // We store streamSid for logging; you'd use it if sending audio
-            // back to Twilio in a bidirectional integration.
             streamSid = message.start.streamSid;
             console.log(`[twilio] Stream started — SID: ${streamSid}`);
             break;
 
           case 'media':
-            // The payload is base64-encoded mulaw audio.  Deepgram's live
-            // WebSocket accepts raw binary, so we decode from base64 first.
-            // SDK v5: sendMedia() replaces the old send() method.
             if (dgConnection) {
               const audio = Buffer.from(message.media.payload, 'base64');
               dgConnection.sendMedia(audio);
@@ -124,11 +108,9 @@ function createApp() {
             break;
 
           case 'stop':
-            // Call ended or stream was stopped.  Clean up the Deepgram
-            // connection so it can return any final buffered transcript.
-            // SDK v5: close() replaces the old finish() method.
             console.log('[twilio] Stream stopped');
             if (dgConnection) {
+              dgConnection.sendCloseStream({ type: 'CloseStream' });
               dgConnection.close();
               dgConnection = null;
             }
@@ -145,7 +127,8 @@ function createApp() {
     twilioWs.on('close', () => {
       console.log('[media] Twilio WebSocket closed');
       if (dgConnection) {
-        dgConnection.finish();
+        dgConnection.sendCloseStream({ type: 'CloseStream' });
+        dgConnection.close();
         dgConnection = null;
       }
     });
@@ -153,13 +136,12 @@ function createApp() {
     twilioWs.on('error', (err) => {
       console.error('[media] Twilio WebSocket error:', err.message);
       if (dgConnection) {
-        dgConnection.finish();
+        dgConnection.close();
         dgConnection = null;
       }
     });
   });
 
-  // Health check — useful for load balancers and uptime monitors.
   app.get('/', (_req, res) => {
     res.json({ status: 'ok', service: 'deepgram-twilio-media-streams' });
   });
