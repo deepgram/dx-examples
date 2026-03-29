@@ -1,0 +1,32 @@
+name: flutter_voice_transcription
+description: Record audio and transcribe it using Deepgram nova-3.
+publish_to: "none"
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Audio recording — cross-platform (iOS, Android, web, desktop)
+  record: ^5.1.0
+  # HTTP client for Deepgram REST API (no official Dart SDK exists)
+  http: ^1.2.0
+  # Read .env file for API key during development
+  flutter_dotenv: ^5.1.0
+  # File path utilities
+  path_provider: ^2.1.0
+  # Permission handling for microphone access
+  permission_handler: ^11.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
