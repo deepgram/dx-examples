@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/deepgram": "^2.0.0",
-    "ai": "^4.0.0",
+    "ai": "^6.0.0",
     "dotenv": "^16.4.0"
   },
   "engines": {
