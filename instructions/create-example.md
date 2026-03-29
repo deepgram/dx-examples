@@ -10,7 +10,16 @@ Deepgram provides:
 - **Voice agents** — same SDKs, WebSocket-based
 - **Audio intelligence** — same SDKs
 
-Always use the official Deepgram SDK for the chosen language. Do not make raw HTTP calls unless there is no SDK for that language.
+**Always use the official Deepgram SDK for the chosen language.** Never make raw HTTP or WebSocket calls to Deepgram APIs directly — not even for "simplicity." The SDK handles authentication, retries, connection management, and stays up to date with API changes. If you find yourself writing `fetch('https://api.deepgram.com/...')` or constructing WebSocket URLs by hand, stop and use the SDK instead.
+
+Available SDKs:
+- Node.js / TypeScript: `@deepgram/sdk` (v5+)
+- Python: `deepgram-sdk` (v3+)
+- Go: `github.com/deepgram/deepgram-go-sdk`
+- .NET: `Deepgram`
+- Rust: `deepgram-rust-sdk`
+
+If no official SDK exists for the language, use the REST API with proper `Authorization: Token YOUR_KEY` headers and document that the SDK is not yet available for that language.
 
 **Always search Kapa for current SDK patterns before writing any code** — SDK APIs change significantly between major versions and your training data may be out of date. See Step 3 below.
 
