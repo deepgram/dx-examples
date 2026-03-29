@@ -15,7 +15,7 @@ name: Process Open PRs
 
 on:
   schedule:
-    - cron: '0 * * * *'   # Every hour
+    - cron: '*/15 * * * *'   # Every 15 minutes
   workflow_dispatch:
 
 concurrency:

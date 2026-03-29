@@ -5,7 +5,7 @@ name: Test Existing Examples
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # Daily 06:00 UTC — before the business day
+    - cron: '0 */6 * * *'   # Every 6 hours
   workflow_dispatch:
 
 concurrency:

@@ -2,7 +2,7 @@ name: Discover Examples
 
 on:
   schedule:
-    - cron: '7 9 * * 1'   # Monday 09:07 UTC — weekly
+    - cron: '0 */6 * * *'   # Every 6 hours
   workflow_dispatch:
 
 concurrency:
