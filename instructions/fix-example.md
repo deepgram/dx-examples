@@ -206,6 +206,7 @@ Removing the label allows CI to re-run. If tests fail again and a new `status:fi
 
 ## Rules
 
+- **Never modify `.github/workflows/` files** — GITHUB_TOKEN cannot push branches containing workflow changes; fixes must only touch example code under `examples/`
 - Never remove credentials from `.env.example` or change real values
 - Apply minimum necessary change — do not refactor or improve unrelated code
 - If the root cause is genuinely unclear after reading the logs and code, post a comment asking for human help:

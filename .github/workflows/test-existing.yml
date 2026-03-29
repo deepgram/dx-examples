@@ -21,7 +21,6 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  workflows: write
 
 jobs:
   # ── Node.js ────────────────────────────────────────────────────────────────
