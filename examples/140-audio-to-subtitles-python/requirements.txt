@@ -1,0 +1,2 @@
+deepgram-sdk>=3.0.0
+deepgram-captions>=2.0.0
