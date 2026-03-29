@@ -1,0 +1,19 @@
+{
+  "name": "deepgram-discord-bot-node",
+  "version": "1.0.0",
+  "description": "Discord bot that transcribes audio file attachments using Deepgram nova-3",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "register": "node src/register-commands.js",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "^5.0.0",
+    "discord.js": "^14.16.0",
+    "dotenv": "^16.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
