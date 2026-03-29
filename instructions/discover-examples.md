@@ -209,16 +209,22 @@ When multiple options are roughly equal, favour the one with the most developers
 
 ## Step 4 — Find the next example number
 
-Check both merged examples and open PRs so concurrent agents don't claim the same number.
+The integer prefix is a **platform namespace**: `020` = Twilio group, `030` = LiveKit group.
+A second LiveKit example is `031`, not a new `090`. A brand-new platform gets the next
+free multiple of 10.
 
 ```bash
-LAST_MERGED=$(ls examples/ | grep -E '^[0-9]' | sort -n | tail -1 | grep -oE '^[0-9]+')
-LAST_PR=$(gh pr list --state open --json title \
+MERGED_NUMS=$(ls examples/ | grep -oE '^[0-9]+' | sort -n)
+PR_NUMS=$(gh pr list --state open --json title \
   --jq '.[].title | capture("^\\[(?:Example|Fix)\\] (?P<n>[0-9]+)") | .n' \
-  2>/dev/null | sort -n | tail -1)
-LAST=$(printf '%s\n' "${LAST_MERGED:-0}" "${LAST_PR:-0}" | sort -n | tail -1)
-NEXT=$(( ${LAST:-0} + 10 ))
-printf "%03d" $NEXT
+  2>/dev/null | sort -n)
+ALL_NUMS=$(printf '%s\n' $MERGED_NUMS $PR_NUMS | sort -n | uniq)
+echo "Taken: $ALL_NUMS"
+
+# New platform: next free multiple of 10
+LAST_ROUND=$(echo "$ALL_NUMS" | grep -E '^[0-9]+0$' | tail -1)
+NEXT_NEW=$(printf "%03d" $(( ${LAST_ROUND:-0} + 10 )))
+echo "Next new platform slot: $NEXT_NEW"
 ```
 
 ## Step 5 — For each chosen integration, create an example

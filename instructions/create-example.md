@@ -69,24 +69,44 @@ Parse `<!-- metadata ... -->` blocks to get `slug`, `language`, `products`. If n
 
 ## Step 2 — Find the next example number
 
-Must account for both merged examples AND open PRs — two agents running
-concurrently would otherwise claim the same number.
+### Numbering convention
+
+The integer prefix is a **platform/integration namespace**, not just a sequence:
+
+- `010` = getting-started group → additional getting-started variants: `011`, `012`…
+- `020` = Twilio group → more Twilio examples: `021`, `022`…
+- `030` = LiveKit group → more LiveKit examples: `031`, `032`…
+- `040` = LangChain group → `041`, `042`…
+- `050` = Vercel AI SDK group → `051`, `052`…
+
+**If you are adding another example for an existing platform:**
+look for the group that platform already occupies and use the next sub-number
+(e.g. a second Twilio example goes in `021`, not a brand-new `090`).
+
+**If you are adding a brand-new platform with no existing group:**
+claim the next free round-number slot (next multiple of 10 after the highest used).
 
 ```bash
-# Highest number already in examples/
-LAST_MERGED=$(ls examples/ | grep -E '^[0-9]' | sort -n | tail -1 | grep -oE '^[0-9]+')
-
-# Highest number claimed by any open PR (parse from PR titles "[Example] NNN — ...")
-LAST_PR=$(gh pr list --state open --json title \
+# All taken numbers (merged + open PRs)
+MERGED_NUMS=$(ls examples/ | grep -oE '^[0-9]+' | sort -n)
+PR_NUMS=$(gh pr list --state open --json title \
   --jq '.[].title | capture("^\\[(?:Example|Fix)\\] (?P<n>[0-9]+)") | .n' \
-  2>/dev/null | sort -n | tail -1)
+  2>/dev/null | sort -n)
+ALL_NUMS=$(printf '%s\n' $MERGED_NUMS $PR_NUMS | sort -n | uniq)
 
-# Take the max of both, then add 10
-LAST=$(printf '%s\n' "${LAST_MERGED:-0}" "${LAST_PR:-0}" | sort -n | tail -1)
-NEXT=$(( ${LAST:-0} + 10 ))
-PADDED=$(printf "%03d" $NEXT)
-echo "Next number: $PADDED (merged high: ${LAST_MERGED:-none}, PR high: ${LAST_PR:-none})"
+# For a NEW platform: next free multiple of 10
+LAST_ROUND=$(echo "$ALL_NUMS" | grep -E '^[0-9]+0$' | tail -1)
+NEXT_PLATFORM=$(( ${LAST_ROUND:-0} + 10 ))
+
+# For an EXISTING platform (e.g. adding a second LiveKit example):
+# Find the group base (e.g. 030) then pick the next sub-number not already taken
+# e.g. if 030 and 031 exist, use 032
+
+echo "New platform slot: $(printf '%03d' $NEXT_PLATFORM)"
+echo "Taken numbers: $ALL_NUMS"
 ```
+
+Always check `ALL_NUMS` before picking — never reuse a taken number.
 
 ## Step 3 — Research the integration
 
