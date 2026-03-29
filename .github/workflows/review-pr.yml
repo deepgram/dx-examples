@@ -10,9 +10,14 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'examples/**'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
 
 concurrency:
-  group: review-pr-${{ github.event.pull_request.number }}
+  group: review-pr-${{ github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: true
 
 permissions:
@@ -22,19 +27,32 @@ permissions:
 
 jobs:
   review:
-    # Match agent PRs by title pattern (labels may not be applied yet on `opened`)
-    # Also match human PRs that added labels manually
+    # For PR events: match by title or label
+    # For manual dispatch: always run
     if: |
+      github.event_name == 'workflow_dispatch' ||
       startsWith(github.event.pull_request.title, '[Example]') ||
       startsWith(github.event.pull_request.title, '[Fix]') ||
       contains(github.event.pull_request.labels.*.name, 'type:example') ||
       contains(github.event.pull_request.labels.*.name, 'type:fix')
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve PR number and branch
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number || inputs.pr_number }}"
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          TITLE=$(gh pr view "$PR_NUMBER" --repo ${{ github.repository }} --json title --jq '.title')
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          SHA=$(gh pr view "$PR_NUMBER" --repo ${{ github.repository }} --json headRefOid --jq '.headRefOid')
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ steps.pr.outputs.sha }}
 
       - name: Get date
         id: date
@@ -55,7 +73,7 @@ jobs:
             Read and execute the instructions in `instructions/review-example.md`.
 
             Context:
-            - PR_NUMBER: ${{ github.event.pull_request.number }}
-            - PR_TITLE: ${{ github.event.pull_request.title }}
+            - PR_NUMBER: ${{ steps.pr.outputs.number }}
+            - PR_TITLE: ${{ steps.pr.outputs.title }}
             - Today's date: ${{ steps.date.outputs.date }}
             - Repository: ${{ github.repository }}

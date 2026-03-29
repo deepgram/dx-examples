@@ -11,9 +11,15 @@ on:
       - 'examples/**/package.json'
       - 'examples/**/package-lock.json'
       - 'examples/**/tsconfig.json'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or SHA to test (default: main)'
+        required: false
+        default: 'main'
 
 concurrency:
-  group: test-node-${{ github.event.pull_request.number }}
+  group: test-node-${{ github.event.pull_request.number || inputs.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -28,6 +34,8 @@ jobs:
       has_node_examples: ${{ steps.detect.outputs.has_node_examples }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || '' }}
       - name: Detect Node.js examples
         id: detect
         run: |
@@ -45,6 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || '' }}
 
       - uses: actions/setup-node@v4
         with:

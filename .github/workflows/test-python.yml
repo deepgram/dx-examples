@@ -8,9 +8,15 @@ on:
       - 'examples/**/requirements*.txt'
       - 'examples/**/pyproject.toml'
       - 'examples/**/setup.py'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or SHA to test (default: main)'
+        required: false
+        default: 'main'
 
 concurrency:
-  group: test-python-${{ github.event.pull_request.number }}
+  group: test-python-${{ github.event.pull_request.number || inputs.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -25,6 +31,8 @@ jobs:
       has_python_examples: ${{ steps.detect.outputs.has_python_examples }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || '' }}
       - name: Detect Python examples
         id: detect
         run: |
@@ -44,6 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || '' }}
 
       - uses: actions/setup-python@v5
         with:

@@ -9,9 +9,14 @@ name: Fix PR
 on:
   pull_request:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to fix'
+        required: true
 
 concurrency:
-  group: fix-pr-${{ github.event.pull_request.number }}
+  group: fix-pr-${{ github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: false
 
 permissions:
@@ -21,14 +26,25 @@ permissions:
 
 jobs:
   fix:
-    # Only trigger on the specific fix label
-    if: github.event.label.name == 'status:fix-needed'
+    # For label events: only trigger on the specific fix label
+    # For manual dispatch: always run
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'status:fix-needed'
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve PR number and branch
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number || inputs.pr_number }}"
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          BRANCH=$(gh pr view "$PR_NUMBER" --repo ${{ github.repository }} --json headRefName --jq '.headRefName')
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ steps.pr.outputs.branch }}
 
       - name: Configure git
         run: |
@@ -44,13 +60,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
-          # Count commits by the bot on this branch that are fixes
+          PR_NUMBER=${{ steps.pr.outputs.number }}
           FIX_COMMITS=$(git log --oneline --author="dx-examples-bot" | grep "^[a-f0-9]* fix(" | wc -l | tr -d ' ')
           echo "fix_attempts=$FIX_COMMITS" >> $GITHUB_OUTPUT
           if [ "$FIX_COMMITS" -ge 3 ]; then
             echo "max_reached=true" >> $GITHUB_OUTPUT
-            gh pr comment $PR_NUMBER --body "@deepgram-devrel — the fix agent has made 3 repair attempts on this PR and tests are still failing. Manual intervention needed. Please review the test output and push a fix directly."
+            gh pr comment $PR_NUMBER --body "@deepgram-devrel — the fix agent has made 3 repair attempts on this PR and tests are still failing. Manual intervention needed."
           else
             echo "max_reached=false" >> $GITHUB_OUTPUT
           fi
@@ -71,8 +86,8 @@ jobs:
             Read and execute the instructions in `instructions/fix-example.md`.
 
             Context:
-            - PR_NUMBER: ${{ github.event.pull_request.number }}
-            - PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+            - PR_NUMBER: ${{ steps.pr.outputs.number }}
+            - PR_BRANCH: ${{ steps.pr.outputs.branch }}
             - Today's date: ${{ steps.date.outputs.date }}
             - Repository: ${{ github.repository }}
             - Fix attempt: ${{ steps.attempt-check.outputs.fix_attempts }} of 3
