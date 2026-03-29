@@ -1,0 +1,23 @@
+{
+  "name": "deepgram-react-native-live-transcription",
+  "version": "1.0.0",
+  "description": "Live speech-to-text in React Native using Deepgram WebSocket streaming",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "expo start",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "^5.0.0",
+    "expo": "~52.0.0",
+    "expo-av": "~15.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.7"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
