@@ -1,0 +1,21 @@
+{
+  "name": "deepgram-cloudflare-worker-transcription",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker that transcribes audio URLs at the edge using Deepgram nova-3",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "^5.0.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.0",
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

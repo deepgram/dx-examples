@@ -1,0 +1,6 @@
+name = "deepgram-transcription"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+# Secrets are set via `wrangler secret put DEEPGRAM_API_KEY` — they're encrypted
+# at rest and never appear in logs or source control. Don't use [vars] for API keys.
