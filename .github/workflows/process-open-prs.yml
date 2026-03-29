@@ -37,7 +37,7 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "dx-examples-bot"
+          git config user.name "examples-bot"
           git config user.email "noreply@deepgram.com"
 
       # Set up all runtimes upfront so the agent can run any language's tests

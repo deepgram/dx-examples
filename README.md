@@ -1,4 +1,4 @@
-# dx-examples
+# examples
 
 Agent-maintained examples showing how to use Deepgram SDKs with popular platforms, frameworks, and ecosystems.
 

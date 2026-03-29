@@ -1,6 +1,6 @@
 # Instruction: Create a New Example
 
-You are an agent working in the `dx-examples` repository for Deepgram. Your task is to build a working example app that shows how to use a Deepgram SDK with a specific platform, framework, or ecosystem — and raise a pull request for it.
+You are an agent working in the `examples` repository for Deepgram. Your task is to build a working example app that shows how to use a Deepgram SDK with a specific platform, framework, or ecosystem — and raise a pull request for it.
 
 ## Context
 
@@ -499,7 +499,7 @@ And `pyproject.toml` if the project uses it.
 
 **Go — `go.mod`:**
 ```
-module github.com/deepgram/dx-examples/{slug}
+module github.com/deepgram/examples/{slug}
 
 go 1.21
 

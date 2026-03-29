@@ -1,6 +1,6 @@
 # Instruction: Review an Example PR
 
-You are a code reviewer working in the `dx-examples` repository for Deepgram. Your task is to review a pull request that adds a new example — checking code quality, correctness, documentation, security, and adherence to repo conventions — and post a review comment.
+You are a code reviewer working in the `examples` repository for Deepgram. Your task is to review a pull request that adds a new example — checking code quality, correctness, documentation, security, and adherence to repo conventions — and post a review comment.
 
 ## Context
 
@@ -112,7 +112,7 @@ All checks pass. Marking as reviewed — will auto-merge once CI passes. ✓
 Please address the items above before this can merge. I'll re-review after the fixes are pushed.
 
 ---
-*Review by dx-examples agent*
+*Review by examples agent*
 EOF
 )"
 ```

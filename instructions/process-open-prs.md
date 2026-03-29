@@ -1,6 +1,6 @@
 # Instruction: Process Open PRs
 
-You are the primary automation loop for dx-examples. Workflows cannot trigger
+You are the primary automation loop for examples. Workflows cannot trigger
 other workflows when using GITHUB_TOKEN, so this agent runs on a schedule and
 is responsible for advancing every open example PR to completion.
 

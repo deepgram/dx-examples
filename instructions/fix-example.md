@@ -1,6 +1,6 @@
 # Instruction: Fix a Failing Example
 
-You are a debugging agent working in the `dx-examples` repository for Deepgram. Your task is to investigate a failing test on a pull request, identify the root cause, fix it, and push the repair.
+You are a debugging agent working in the `examples` repository for Deepgram. Your task is to investigate a failing test on a pull request, identify the root cause, fix it, and push the repair.
 
 ## Step 1 — Identify which PR needs fixing
 
@@ -191,7 +191,7 @@ gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
 Tests will re-run automatically. If they pass, this PR will auto-merge.
 
 ---
-*Fix by dx-examples agent*
+*Fix by examples agent*
 EOF
 )"
 ```

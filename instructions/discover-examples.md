@@ -1,6 +1,6 @@
 # Instruction: Discover New Example Opportunities
 
-You are an agent working in the `dx-examples` repository for Deepgram. Your task is to find platforms, frameworks, and ecosystems that would benefit from a Deepgram integration example — and raise a PR for each new one you decide to build, or create queue issues for ideas you want to defer.
+You are an agent working in the `examples` repository for Deepgram. Your task is to find platforms, frameworks, and ecosystems that would benefit from a Deepgram integration example — and raise a PR for each new one you decide to build, or create queue issues for ideas you want to defer.
 
 ## Context
 

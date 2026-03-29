@@ -48,7 +48,7 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "dx-examples-bot"
+          git config user.name "examples-bot"
           git config user.email "noreply@deepgram.com"
 
       - name: Get date
@@ -61,7 +61,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=${{ steps.pr.outputs.number }}
-          FIX_COMMITS=$(git log --oneline --author="dx-examples-bot" | grep "^[a-f0-9]* fix(" | wc -l | tr -d ' ')
+          FIX_COMMITS=$(git log --oneline --author="examples-bot" | grep "^[a-f0-9]* fix(" | wc -l | tr -d ' ')
           echo "fix_attempts=$FIX_COMMITS" >> $GITHUB_OUTPUT
           if [ "$FIX_COMMITS" -ge 3 ]; then
             echo "max_reached=true" >> $GITHUB_OUTPUT
