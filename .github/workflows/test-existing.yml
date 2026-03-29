@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: '0 */6 * * *'   # Every 6 hours
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why are you triggering this manually?'
+        required: false
+        default: 'manual test'
 
 concurrency:
   group: test-existing
