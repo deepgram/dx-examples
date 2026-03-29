@@ -1,0 +1,5 @@
+deepgram-sdk>=3.0.0
+langchain-core>=1.0.0
+langchain-openai>=1.0.0
+langchain>=1.0.0
+python-dotenv>=1.0.0
