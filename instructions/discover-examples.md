@@ -12,6 +12,19 @@ Deepgram provides:
 
 A good example demonstrates a real integration pattern that a developer would actually use. It should be minimal but complete — not a toy, not overengineered.
 
+**Examples are not limited to web apps.** The right form depends entirely on the use case:
+- A 30-line Python script that transcribes a meeting recording from the command line
+- A Flutter mobile app with a live "press to talk" button
+- A Bash one-liner piped through Deepgram's REST API
+- A Discord bot that transcribes voice channel recordings
+- A Tauri desktop app with a floating transcription overlay
+- A Jupyter notebook showing audio intelligence on a dataset
+- A React Native component for voice input
+- A serverless function that processes uploaded audio
+- A CLI tool with subcommands wrapping the SDK
+
+Pick the form that best matches how a developer would actually encounter this integration.
+
 ## Slugification convention
 
 ```bash
@@ -51,71 +64,88 @@ slugify() {
 
 ## Step 2 — Research new integration opportunities
 
-Search across these categories. For each, assess: does Deepgram have an existing example? Is this a real integration pattern developers need?
+Search across these categories. For each, assess: does Deepgram have an existing example? Is this a real integration pattern developers need? **For each idea, also decide the best form it should take** — script, app, tool, plugin, notebook, etc.
+
+### Terminal scripts and CLI tools
+- `ffmpeg` pipeline — transcribe any local audio/video file from the terminal
+- `whisper`-compatible CLI replacement using Deepgram
+- Shell alias / function for quick audio transcription
+- Python/Node CLI with `argparse`/`commander` — batch transcribe a folder
+- `jq`-friendly output formats for scripting pipelines
+- `deepgram-captions` — generate SRT/VTT from any media file
+
+### Mobile apps
+- React Native — live "press to talk" transcription component
+- Flutter — voice memo app with Deepgram STT
+- Swift (iOS) — AVAudioEngine → Deepgram WebSocket live transcription
+- Kotlin (Android) — AudioRecord → Deepgram WebSocket
+- Expo — cross-platform voice input form field
+
+### Desktop apps
+- Electron — floating live transcription overlay (always on top)
+- Tauri (Rust + web frontend) — lightweight transcription desktop app
+- macOS menu bar app (Swift) — transcribe clipboard audio
+- Python + tkinter/PyQt — meeting recorder + transcription viewer
 
 ### Partner platforms (communications / telephony)
-- Twilio Voice, Media Streams, Flex
+- Twilio Voice + Media Streams — transcribe phone calls in real-time
 - Vonage / Nexmo Voice API
 - Bandwidth voice API
-- Zoom Phone / Video SDK
-- Daily.co real-time audio
+- Zoom Phone / Meeting SDK — transcribe recordings
+- Daily.co real-time audio room
 - Agora voice SDK
 
 ### Voice / agent infrastructure (uses Deepgram as provider — not competitors)
-- LiveKit agents (uses Deepgram STT/TTS)
-- Pipecat voice pipeline (uses Deepgram STT/TTS)
+- LiveKit agents — voice AI pipeline using Deepgram STT/TTS
+- Pipecat voice pipeline
 - Bolna voice agent framework
 - Vapi.ai (uses Deepgram as STT provider)
 
+### Chat platforms and bots
+- Discord bot — transcribe voice channel recordings, slash command STT
+- Slack Bolt — transcribe audio messages, `/transcribe` slash command
+- Telegram bot — voice message to text
+- WhatsApp Business API — voice note transcription
+
 ### AI frameworks / toolkits
-- LangChain (Python and JS) — STT as a tool
-- LlamaIndex — audio processing nodes
-- Vercel AI SDK — speech streaming
-- TanStack AI
-- Semantic Kernel (C#)
-- Haystack
+- LangChain (Python and JS) — STT as a retrieval tool
+- LlamaIndex — audio document processing
+- Vercel AI SDK — speech streaming in Next.js
+- Semantic Kernel (C#) — voice input plugin
 - AutoGen / CrewAI — voice-enabled agents
+- Haystack — audio intelligence pipeline
+- Jupyter notebook — batch audio intelligence analysis on a dataset
 
-### Frontend frameworks
-- React + Web Audio API
-- Next.js server-sent events for live transcription
-- Vue 3 composables for STT
-- SvelteKit
-- Nuxt
-- Remix
+### Web frontend (when a browser/UI is the right form)
+- Vanilla JS + Web Audio API — no framework, pure browser STT
+- React hook — `useDeepgramTranscription()` with streaming
+- Vue 3 composable — `useSTT()`
+- Svelte store — reactive live transcript
+- Web Component — `<dg-transcript>` embeddable anywhere
 
-### Backend frameworks
-- Express.js + WebSocket live transcription
-- Fastify
-- FastAPI (Python) + streaming
-- Flask
-- Django Channels
-- Go net/http + WebSocket
-- Gin
-- Echo
+### Backend / serverless (when server-side processing is the right form)
+- Express.js + WebSocket — live transcription relay server
+- FastAPI (Python) — async audio upload → transcript API
+- Cloudflare Worker — edge transcription of audio URLs
+- AWS Lambda — S3 trigger → transcribe → store in DynamoDB
+- Vercel Edge Function — streaming STT for Next.js
 
-### Cloud / serverless
-- AWS Lambda transcription pipeline
-- AWS Transcribe replacement demo
-- Google Cloud Functions
-- Azure Functions
-- Cloudflare Workers
-- Vercel Edge Functions
+### Integrations and plugins
+- VS Code extension — dictate code or comments
+- Obsidian plugin — transcribe voice notes into vault
+- n8n community node — visual workflow automation
+- Raycast extension — global hotkey for dictation
+- Alfred workflow (macOS) — voice input anywhere
+- Browser extension — transcribe any video playing in tab
+
+### Hardware and IoT (where feasible)
+- Raspberry Pi — always-listening voice command terminal
+- Arduino + Python bridge — embedded wake-word + transcription
 
 ### Workflow / automation
-- n8n community node (competitors have this)
-- Make.com (Integromat)
-- Zapier integration
-
-### Mobile (if SDK exists or REST is usable)
-- React Native
-- Flutter / Dart
-
-### Miscellaneous
-- Slack Bolt — transcribe audio messages
-- Discord bot — transcribe voice channels
-- Electron desktop app — live meeting notes
-- CLI tool using Node.js / Python SDK
+- GitHub Actions step — transcribe recorded demos in CI
+- Make.com (Integromat) custom app
+- Python script — auto-caption a folder of podcast MP3s
 
 Use web search and WebFetch to verify that an integration is real and useful:
 ```bash
@@ -130,10 +160,21 @@ For each candidate integration:
 
 1. Check it's not already in `examples/`, open PRs, open issues, or rejections
 2. Assess priority (1–10):
-   - 8–10: Major platform, many developers, no existing Deepgram example
+   - 8–10: Major partner platform (Twilio, LiveKit, Pipecat, Zoom), OR a high-traffic ecosystem (Discord, Slack, LangChain, React Native), no existing Deepgram example
    - 5–7: Useful but niche, or partial coverage exists
    - Below 5: Skip
 3. Pick the top 3–5 to act on this run
+
+### Partner integrations get higher priority
+
+Partner and ecosystem integrations — places where many developers are already building and would find Deepgram examples valuable — should score 8–10:
+- **Telephony partners**: Twilio, Vonage, Bandwidth, Zoom — real-time call transcription is a high-value use case
+- **Agent infrastructure**: LiveKit, Pipecat, Vapi — these use Deepgram APIs and their communities would benefit from examples
+- **Chat platforms**: Discord, Slack — large developer communities with audio features
+- **AI frameworks**: LangChain, LlamaIndex, Vercel AI SDK — integrating STT/TTS into AI pipelines is a growing need
+- **Mobile**: React Native, Flutter — voice input in mobile apps is underserved by Deepgram examples
+
+When multiple options are roughly equal, favour the one with the most developers using it (check npm weekly downloads, GitHub stars, official SDK/plugin existence).
 
 ## Step 4 — Find the next example number
 

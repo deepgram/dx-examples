@@ -60,15 +60,35 @@ Before writing any code:
 ## Step 4 — Plan the example
 
 Decide:
+- **What form should this take?** — see below
 - **What it demonstrates** — one clear thing (e.g. "transcribe a Twilio voice call in real-time")
 - **Minimum viable scope** — enough to be useful, not exhaustive
 - **Required env vars** — list every external credential needed
 - **How to test it** — what assertion proves it works?
 
+### Choosing the right form
+
+Don't default to "web app." Pick the form that a real developer would actually use for this integration:
+
+| If the use case is... | Consider... |
+|----------------------|-------------|
+| Processing audio files locally | Shell script, Python/Node CLI, Jupyter notebook |
+| Real-time voice on mobile | Flutter, React Native, Swift, Kotlin app |
+| Desktop dictation or transcription | Electron, Tauri, native macOS/Windows app |
+| Bot in a chat platform | Discord.py, Slack Bolt, Telegram bot |
+| Editor/tool integration | VS Code extension, Obsidian plugin, Raycast extension |
+| Phone call / telephony | Twilio/Vonage webhook server |
+| Browser-only | Vanilla HTML+JS, React component, Web Component |
+| AI pipeline step | LangChain tool, LlamaIndex node, AutoGen agent |
+| Serverless / cloud | Lambda function, Cloudflare Worker, Edge function |
+| Hardware / IoT | Raspberry Pi script, embedded Python |
+
+A small, focused script that does one thing well is often more useful than a full app. A 50-line Python file that transcribes any audio file passed as a CLI argument will get more real-world use than a polished React dashboard that does the same thing.
+
 A good example scope:
 - Narrow: one feature, one integration point
-- Realistic: a pattern a developer would actually use in production
-- Runnable: someone can clone it, set env vars, and run it
+- Realistic: a pattern a developer would actually use
+- Runnable: someone can clone it, set env vars, and run it immediately
 
 ## Step 5 — Create the branch
 
@@ -97,34 +117,66 @@ mkdir -p "${EXAMPLE_DIR}/src" "${EXAMPLE_DIR}/tests"
 ```markdown
 # {Title}
 
-{2-3 sentence description of what this example demonstrates and why it's useful.}
+{2-3 sentence description of what this example demonstrates and why it's useful.
+Lead with the thing the developer will be able to DO, not the technology used.}
 
 ## What you'll build
 
-{One paragraph describing the end result — what does running this code do?}
+{One paragraph describing the end result — what does running this code actually produce?
+Be concrete: "A terminal command that prints a transcript", "A Flutter app with a live
+captions view", "A Discord bot that replies to voice messages with their transcript", etc.}
 
 ## Prerequisites
 
-- {Runtime and version, e.g. Node.js 18+}
+- {Exact runtime and version, e.g. "Node.js 18+", "Python 3.10+", "Flutter 3.19+", "Go 1.21+"}
 - Deepgram account — [get a free API key](https://console.deepgram.com/)
-- {Other service} account — [sign up](https://...)
+- {Other service if needed} — [sign up]({url})
 
 ## Environment variables
 
-Copy `.env.example` to `.env` and fill in your credentials:
+{Skip this section entirely if only DEEPGRAM_API_KEY is needed and describe it inline.}
+{If multiple vars are needed, use a table:}
 
 | Variable | Where to find it |
 |----------|-----------------|
 | `DEEPGRAM_API_KEY` | [Deepgram console](https://console.deepgram.com/) |
-| `{OTHER_VAR}` | {Where to find it} |
+| `{OTHER_VAR}` | {Exact path in the service's dashboard} |
 
-## Run
+Copy `.env.example` to `.env` and fill in your values.
 
-{Exact commands to install and run, e.g.}
+## Install and run
+
+{Exact commands that work from a fresh clone. Use the most natural form for the language.}
+
+{Examples — pick the right one, don't use all of them:}
 
 ```bash
+# Python script
+pip install -r requirements.txt
+python src/transcribe.py recording.mp3
+```
+
+```bash
+# Node.js CLI
 npm install
-npm start
+node src/index.js --file recording.mp3
+```
+
+```bash
+# Go binary
+go run ./cmd/transcribe --file recording.mp3
+```
+
+```bash
+# Flutter mobile app
+flutter pub get
+flutter run
+```
+
+```bash
+# Shell script (no install needed)
+export DEEPGRAM_API_KEY=your_key_here
+bash transcribe.sh recording.mp3
 ```
 
 ## How it works
