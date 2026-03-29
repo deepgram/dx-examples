@@ -5,12 +5,45 @@ You are an agent working in the `dx-examples` repository for Deepgram. Your task
 ## Context
 
 Deepgram provides:
-- **STT** — `@deepgram/sdk` (Node.js), `deepgram` (Python), `github.com/deepgram/deepgram-go-sdk` (Go)
+- **STT** — `@deepgram/sdk` (Node.js/JS), `deepgram` (Python), `github.com/deepgram/deepgram-go-sdk` (Go)
 - **TTS** — same SDKs
 - **Voice agents** — same SDKs, WebSocket-based
 - **Audio intelligence** — same SDKs
 
 Always use the official Deepgram SDK for the chosen language. Do not make raw HTTP calls unless there is no SDK for that language.
+
+**Always search Kapa for current SDK patterns before writing any code** — SDK APIs change significantly between major versions and your training data may be out of date. See Step 3 below.
+
+### Current SDK API patterns (as of SDK v5 — verify with Kapa)
+
+**Node.js / TypeScript:**
+```js
+const { DeepgramClient } = require('@deepgram/sdk');  // NOT createClient
+const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
+
+// Pre-recorded STT — flat single options object, NOT two arguments
+const data = await deepgram.listen.v1.media.transcribeUrl({ url, model: 'nova-3', smart_format: true });
+// v5 throws on error — use try/catch, NOT { result, error } destructuring
+const transcript = data.results.channels[0].alternatives[0].transcript;
+
+// Live STT
+const connection = deepgram.listen.v1.live({ model: 'nova-3' });
+
+// TTS
+const response = await deepgram.speak.v1.text.speak({ text: 'Hello', model: 'aura-2-en' });
+```
+
+**Python:**
+```python
+from deepgram import DeepgramClient
+client = DeepgramClient()  # reads DEEPGRAM_API_KEY from env automatically
+response = client.listen.v1.media.transcribe_url(url=url, model='nova-3', smart_format=True)
+transcript = response.results.channels[0].alternatives[0].transcript
+```
+
+**Current model names:** `nova-3` (general), `nova-3-phonecall`, `nova-3-medical` for STT; `aura-2-en` for TTS.
+
+These patterns come from Kapa queries on 2025-03-29. **Re-run Kapa searches before writing** — method names change between major versions.
 
 ## Slugification convention
 
@@ -160,15 +193,15 @@ Comments are the most valuable part of an example. A developer cloning this will
 **Do not write:**
 ```js
 // Create client
-const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
 ```
 
 **Do write:**
 ```js
-// createClient() is the main entry point for the JS SDK. You can also pass
-// options here to point at a self-hosted instance:
-//   createClient(key, { global: { url: 'https://your-host.com' } })
-const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+// SDK v5: DeepgramClient constructor takes an options object, not a bare string.
+// To point at a self-hosted instance add an environment option:
+//   new DeepgramClient({ apiKey: '...', environment: { base: 'https://your-host.com' } })
+const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
 ```
 
 **Things worth commenting on in every example:**
@@ -178,12 +211,13 @@ const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
    - "We buffer 100ms of audio before sending to avoid Deepgram receiving many tiny packets"
 
 2. **SDK-specific gotchas**
-   - "The JS SDK returns `{ result, error }` instead of throwing — always check `error` before using `result`"
+   - "SDK v5 throws on errors — use try/catch, not `{ result, error }` destructuring (that was v3/v4)"
+   - "SDK v5 options are a flat single object — `transcribeUrl({ url, model, smart_format })`, not two arguments"
    - "The Python SDK's streaming response is an async generator — you must iterate it with `async for`"
    - "`transcribeUrl()` has Deepgram fetch the URL server-side; use `transcribeFile()` for local files"
 
 3. **Parameter choices and alternatives**
-   - "nova-2 is the general-purpose model. For phone calls use nova-2-phonecall; for medical use nova-2-medical"
+   - "nova-3 is the current general-purpose model. For phone calls: nova-3-phonecall; for medical: nova-3-medical"
    - "smart_format adds punctuation and formats numbers/dates — highly recommended, adds ~10ms"
    - "diarize: true adds speaker labels but adds ~200ms. Omit for single-speaker audio"
 
@@ -332,19 +366,22 @@ if (missing.length > 0) {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
+// SDK v5: DeepgramClient (class) replaces createClient() (function) from v3/v4.
+// Verify current patterns with Kapa before writing — these change between majors.
+const { DeepgramClient } = require('@deepgram/sdk');
+
 async function run() {
-  // Import here so missing credentials exit before any module loading failures
-  const { createClient } = require('@deepgram/sdk');
-  const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+  const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
 
-  // Test the integration
-  const { result, error } = await deepgram.listen.prerecorded.transcribeUrl(
-    { url: 'https://dpgr.am/spacewalk.wav' },
-    { model: 'nova-2', smart_format: true }
-  );
-  if (error) throw error;
+  // SDK v5: flat single options object (not two arguments).
+  // SDK v5: throws on error — use try/catch, not { result, error } destructuring.
+  const data = await deepgram.listen.v1.media.transcribeUrl({
+    url: 'https://dpgr.am/spacewalk.wav',
+    model: 'nova-3',
+    smart_format: true,
+  });
 
-  const transcript = result.results.channels[0].alternatives[0].transcript;
+  const transcript = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
   if (!transcript || transcript.length < 10) throw new Error('Transcript too short');
 
   console.log('✓ Integration working');
@@ -376,13 +413,17 @@ if missing:
     sys.exit(2)
 # ────────────────────────────────────────────────────────────────────────────
 
-from deepgram import DeepgramClient, PrerecordedOptions
+# SDK v5 Python — verify current patterns with Kapa before writing.
+# DeepgramClient() reads DEEPGRAM_API_KEY from env automatically (no arg needed).
+from deepgram import DeepgramClient
 
 def test_integration():
-    client = DeepgramClient(os.environ["DEEPGRAM_API_KEY"])
-    response = client.listen.prerecorded.v("1").transcribe_url(
-        {"url": "https://dpgr.am/spacewalk.wav"},
-        PrerecordedOptions(model="nova-2", smart_format=True),
+    client = DeepgramClient()  # reads DEEPGRAM_API_KEY from env
+    # SDK v5 Python: keyword arguments, not a PrerecordedOptions object
+    response = client.listen.v1.media.transcribe_url(
+        url="https://dpgr.am/spacewalk.wav",
+        model="nova-3",
+        smart_format=True,
     )
     transcript = response.results.channels[0].alternatives[0].transcript
     assert len(transcript) > 10, "Transcript too short"
