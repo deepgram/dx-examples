@@ -63,6 +63,8 @@ jobs:
       - name: Run tests for all Python examples
         id: run-tests
         continue-on-error: true
+        env:
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
         run: |
           FAILED_EXAMPLES=""
           MISSING_CRED_EXAMPLES=""
@@ -146,7 +148,7 @@ jobs:
                                            || echo "has_missing=false"  >> $GITHUB_OUTPUT
 
       - name: Post missing-credentials comment
-        if: steps.run-tests.outputs.has_missing == 'true'
+        if: steps.run-tests.outputs.has_missing == 'true' && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
