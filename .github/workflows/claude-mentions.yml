@@ -27,23 +27,27 @@ jobs:
           git config user.name "examples-bot"
           git config user.email "noreply@deepgram.com"
 
-      - name: Check org membership
+      - name: Check write permission
         id: membership
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           USERNAME="${{ github.event.comment.user.login }}"
-          # Allow bots and github-actions through too
+          # Skip bots
           if [[ "$USERNAME" == *"[bot]"* ]] || [[ "$USERNAME" == "github-actions" ]]; then
             echo "is_member=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          if gh api "orgs/deepgram/members/${USERNAME}" --silent 2>/dev/null; then
+          # Check collaborator permission level — must be write, maintain, or admin
+          PERM=$(gh api "repos/${{ github.repository }}/collaborators/${USERNAME}/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+          echo "Permission for $USERNAME: $PERM"
+          if [[ "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
             echo "is_member=true" >> $GITHUB_OUTPUT
-            echo "$USERNAME is a Deepgram org member — allowing"
+            echo "$USERNAME has $PERM access — allowing"
           else
             echo "is_member=false" >> $GITHUB_OUTPUT
-            echo "$USERNAME is not a Deepgram org member — skipping"
+            echo "$USERNAME has $PERM access — skipping (need write+)"
           fi
 
       - name: Get context
