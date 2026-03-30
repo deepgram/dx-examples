@@ -14,8 +14,8 @@ const DEEPGRAM_LIVE_OPTIONS = {
   encoding: 'mulaw',
   sample_rate: 8000,
   channels: 1,
-  smart_format: 'true',
-  interim_results: 'true',
+  smart_format: true,
+  interim_results: true,
   utterance_end_ms: 1000,
 };
 
