@@ -37,7 +37,7 @@ PRs requiring partner credentials stay open with a `⏸` comment until secrets a
 | [120](examples/120-slack-transcribe-bot-node/) | Slack Bot — Auto-Transcribe Audio Messages with Deepgram | Node.js | Slack | ✅ passing |
 | [130](examples/130-telegram-bot-python/) | Telegram Voice Transcription Bot | Python | Telegram | ❌ failing |
 | [140](examples/140-audio-to-subtitles-python/) | Audio to Subtitles CLI | Python | Deepgram SDK | ❌ failing |
-| [150](examples/140-flutter-voice-transcription-dart/) | Flutter Voice Transcription | Dart | Flutter | — |
+| [150](examples/150-flutter-voice-transcription-dart/) | Flutter Voice Transcription | Dart | Flutter | — |
 <!-- examples-table-end -->
 
 *Status verified by `pm-dashboard` on 2026-03-30.*
