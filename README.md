@@ -27,14 +27,14 @@ PRs requiring partner credentials stay open with a `⏸` comment until secrets a
 | [020](examples/020-twilio-media-streams-node/) | Twilio Media Streams — Real-Time Call Transcription | Node.js | Twilio | ❌ failing |
 | [030](examples/030-livekit-agents-python/) | LiveKit Agents — Voice Assistant with Deepgram STT | Python | LiveKit | ❌ failing |
 | [040](examples/040-langchain-stt-tool-python/) | LangChain STT Tool — Transcribe Audio in AI Pipelines | Python | LangChain | ❌ failing |
-| [050](examples/050-vercel-ai-sdk-node/) | Vercel AI SDK — Transcribe Audio and Generate Speech | Node.js | Vercel AI SDK | ✅ passing |
-| [060](examples/060-discord-bot-node/) | Discord Bot — Transcribe Audio Attachments | Node.js | Discord | ✅ passing |
+| [050](examples/050-vercel-ai-sdk-node/) | Vercel AI SDK — Transcribe Audio and Generate Speech with Deepgram | Node.js | Vercel AI SDK | ✅ passing |
+| [060](examples/060-discord-bot-node/) | Discord Bot — Transcribe Audio Attachments with Deepgram | Node.js | Discord | ✅ passing |
 | [070](examples/070-vonage-voice-websocket-node/) | Vonage Voice API — Real-Time Call Transcription | Node.js | Vonage | ✅ passing |
-| [080](examples/080-pipecat-voice-pipeline-python/) | Pipecat Voice Pipeline — Conversational Bot | Python | Pipecat | ❌ failing |
+| [080](examples/080-pipecat-voice-pipeline-python/) | Pipecat Voice Pipeline — Conversational Bot with Deepgram STT & TTS | Python | Pipecat | ❌ failing |
 | [090](examples/090-react-native-live-transcription-js/) | React Native Live Transcription | Node.js | React Native | ✅ passing |
 | [100](examples/100-fastapi-audio-transcription-python/) | FastAPI Audio Transcription API | Python | FastAPI | ❌ failing |
 | [110](examples/110-cloudflare-worker-transcription-js/) | Cloudflare Worker — Edge Audio Transcription | Node.js | Cloudflare | ✅ passing |
-| [120](examples/120-slack-transcribe-bot-node/) | Slack Bot — Auto-Transcribe Audio Messages | Node.js | Slack | ⏳ needs credentials |
+| [120](examples/120-slack-transcribe-bot-node/) | Slack Bot — Auto-Transcribe Audio Messages with Deepgram | Node.js | Slack | ✅ passing |
 | [130](examples/130-telegram-bot-python/) | Telegram Voice Transcription Bot | Python | Telegram | ⏳ needs credentials |
 | [140](examples/140-audio-to-subtitles-python/) | Audio to Subtitles CLI | Python | Deepgram SDK | ❌ failing |
 | [150](examples/140-flutter-voice-transcription-dart/) | Flutter Voice Transcription | Dart | Flutter | — |
