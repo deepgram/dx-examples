@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
-const { execSync, spawnSync } = require('child_process');
+const { execSync } = require('child_process');
 const WebSocket = require('ws');
 
 // ── Credential check ─────────────────────────────────────────────────────────
@@ -27,39 +27,77 @@ const { createApp } = require('../src/index.js');
 const PORT       = 3099;
 const AUDIO_URL  = 'https://dpgr.am/spacewalk.wav';
 const TMP_WAV    = '/tmp/twilio_test.wav';
-const TMP_MULAW  = '/tmp/twilio_test.mulaw';
-// Twilio sends ~20 ms frames; 8 000 Hz × 1 byte/sample × 0.02 s = 160 bytes.
-// We use 320 to match Twilio's actual observed frame size.
 const CHUNK_SIZE = 320;
 
-// Convert a known audio file to μ-law 8 kHz using ffmpeg.
-function ensureFfmpeg() {
-  const check = spawnSync('ffmpeg', ['-version'], { stdio: 'pipe' });
-  if (check.status === 0) return;
-  console.log('ffmpeg not found — installing via apt-get...');
-  execSync('sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg', { stdio: 'pipe' });
+const LINEAR_TO_ULAW = (() => {
+  const BIAS = 0x84;
+  const CLIP = 32635;
+  const table = new Int8Array(65536);
+  for (let i = -32768; i < 32768; i++) {
+    let sample = i < 0 ? ~i : i;
+    if (sample > CLIP) sample = CLIP;
+    sample += BIAS;
+    let exponent = 7;
+    for (let expMask = 0x4000; (sample & expMask) === 0 && exponent > 0; exponent--, expMask >>= 1);
+    const mantissa = (sample >> (exponent + 3)) & 0x0F;
+    let ulawByte = ~(((i < 0 ? 0x80 : 0) | (exponent << 4) | mantissa)) & 0xFF;
+    table[i & 0xFFFF] = ulawByte;
+  }
+  return table;
+})();
+
+function wavToMulaw8k(wavBuffer) {
+  let offset = 12;
+  let sampleRate = 0, bitsPerSample = 0, numChannels = 0, dataStart = 0, dataSize = 0;
+  while (offset < wavBuffer.length - 8) {
+    const chunkId = wavBuffer.toString('ascii', offset, offset + 4);
+    const chunkSize = wavBuffer.readUInt32LE(offset + 4);
+    if (chunkId === 'fmt ') {
+      numChannels = wavBuffer.readUInt16LE(offset + 10);
+      sampleRate = wavBuffer.readUInt32LE(offset + 12);
+      bitsPerSample = wavBuffer.readUInt16LE(offset + 22);
+    } else if (chunkId === 'data') {
+      dataStart = offset + 8;
+      dataSize = chunkSize;
+      break;
+    }
+    offset += 8 + chunkSize;
+  }
+  if (!dataStart) throw new Error('Invalid WAV: no data chunk');
+
+  const bytesPerSample = bitsPerSample / 8;
+  const totalSamples = Math.floor(dataSize / (bytesPerSample * numChannels));
+  const ratio = sampleRate / 8000;
+  const outLen = Math.floor(totalSamples / ratio);
+  const out = Buffer.alloc(outLen);
+
+  for (let i = 0; i < outLen; i++) {
+    const srcIdx = Math.floor(i * ratio);
+    const byteOff = dataStart + srcIdx * bytesPerSample * numChannels;
+    let sample;
+    if (bitsPerSample === 16) {
+      sample = wavBuffer.readInt16LE(byteOff);
+    } else if (bitsPerSample === 24) {
+      sample = (wavBuffer[byteOff] | (wavBuffer[byteOff + 1] << 8) | (wavBuffer[byteOff + 2] << 16));
+      if (sample & 0x800000) sample |= ~0xFFFFFF;
+      sample = sample >> 8;
+    } else if (bitsPerSample === 32) {
+      sample = wavBuffer.readInt32LE(byteOff) >> 16;
+    } else {
+      sample = (wavBuffer[byteOff] - 128) << 8;
+    }
+    out[i] = LINEAR_TO_ULAW[sample & 0xFFFF];
+  }
+  return out;
 }
 
 function prepareMulawAudio() {
-  ensureFfmpeg();
-
   console.log('Downloading test audio...');
   execSync(`curl -s -L -o "${TMP_WAV}" "${AUDIO_URL}"`, { stdio: 'pipe' });
 
-  console.log('Converting to μ-law 8 kHz mono (ffmpeg)...');
-  const result = spawnSync('ffmpeg', [
-    '-y', '-i', TMP_WAV,
-    '-ar', '8000', '-ac', '1', '-f', 'mulaw', TMP_MULAW,
-  ], { stdio: 'pipe' });
-
-  if (result.error) {
-    throw new Error(`ffmpeg could not be started: ${result.error.message}`);
-  }
-  if (result.status !== 0) {
-    throw new Error(`ffmpeg failed (exit ${result.status}): ${(result.stderr || Buffer.alloc(0)).toString().slice(0, 300)}`);
-  }
-
-  const audio = fs.readFileSync(TMP_MULAW);
+  console.log('Converting to μ-law 8 kHz mono...');
+  const wavData = fs.readFileSync(TMP_WAV);
+  const audio = wavToMulaw8k(wavData);
   console.log(`✓ Audio ready: ${audio.length} bytes of μ-law 8 kHz`);
   return audio;
 }
@@ -159,7 +197,6 @@ function testMediaStreamFlow(port, audioData) {
         if (offset >= audioData.length || offset >= MAX_BYTES) {
           // 4. "stop" — call ended
           ws.send(JSON.stringify({ event: 'stop', streamSid: 'MZ_ci_test' }));
-          setTimeout(() => ws.close(), 500);
           return;
         }
 
@@ -218,17 +255,18 @@ async function run() {
     console.log(`\n✓ Received ${transcripts.length} transcript event(s)`);
     console.log(`  First: ${transcripts[0]}`);
 
-    // Verify we got recognisable English words (any transcript text counts)
+    // Verify recognisable words from the spacewalk recording
     const combined = transcripts.join(' ').toLowerCase();
-    const hasText = combined.replace(/\[(?:final|interim)\]/g, '').trim().length > 0;
+    const expectedWords = ['spacewalk', 'astronaut', 'nasa'];
+    const found = expectedWords.filter(w => combined.includes(w));
 
-    if (!hasText) {
+    if (found.length === 0) {
       throw new Error(
-        `Transcripts arrived but contained no text.\n` +
+        `Transcripts arrived but no expected words found.\n` +
         `Got: ${transcripts.slice(0, 3).join(' | ')}`,
       );
     }
-    console.log(`✓ Transcript content verified (received text from Deepgram)`);
+    console.log(`✓ Transcript content verified (found: ${found.join(', ')})`);
 
   } finally {
     server.close();
