@@ -74,6 +74,9 @@ jobs:
           VONAGE_PRIVATE_KEY: ${{ secrets.VONAGE_PRIVATE_KEY }}
           DAILY_API_KEY: ${{ secrets.DAILY_API_KEY }}
           PIPECAT_API_KEY: ${{ secrets.PIPECAT_API_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_TOKEN: ${{ secrets.SLACK_APP_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
