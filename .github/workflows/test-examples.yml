@@ -1,16 +1,18 @@
 name: Test Examples
 
-# Single workflow replacing test-node/python/go/java.yml and test-pr-example.yml.
+# Single workflow for all example languages.
 #
-# Design:
-#   detect     — finds which example dirs changed, groups by language
-#   test-node  — runs only if detect found Node examples, skips otherwise
-#   test-python
-#   test-go
-#   test-java
-#   lint-md    — markdownlint --fix on changed READMEs; auto-commits fixes; always passes
-#   e2e-api-check — final gate: fails if any language job failed; this is the
-#                   required branch-protection check
+# Jobs:
+#   detect     — finds changed example dirs, groups by language marker file
+#   test-node  — package.json
+#   test-python — requirements.txt / pyproject.toml
+#   test-go    — go.mod
+#   test-java  — pom.xml / build.gradle
+#   test-rust  — Cargo.toml
+#   test-dotnet — *.csproj / *.sln
+#   test-cli   — example.sh / src/*.sh; installs Deepgram CLI first
+#   lint-md    — markdownlint --fix; auto-commits; always passes
+#   e2e-api-check — required gate; fails only if a language job failed
 
 on:
   pull_request:
@@ -43,11 +45,17 @@ jobs:
       python_examples: ${{ steps.scan.outputs.python_examples }}
       go_examples:     ${{ steps.scan.outputs.go_examples }}
       java_examples:   ${{ steps.scan.outputs.java_examples }}
+      rust_examples:   ${{ steps.scan.outputs.rust_examples }}
+      dotnet_examples: ${{ steps.scan.outputs.dotnet_examples }}
+      cli_examples:    ${{ steps.scan.outputs.cli_examples }}
       md_files:        ${{ steps.scan.outputs.md_files }}
       has_node:        ${{ steps.scan.outputs.has_node }}
       has_python:      ${{ steps.scan.outputs.has_python }}
       has_go:          ${{ steps.scan.outputs.has_go }}
       has_java:        ${{ steps.scan.outputs.has_java }}
+      has_rust:        ${{ steps.scan.outputs.has_rust }}
+      has_dotnet:      ${{ steps.scan.outputs.has_dotnet }}
+      has_cli:         ${{ steps.scan.outputs.has_cli }}
       has_md:          ${{ steps.scan.outputs.has_md }}
     steps:
       - uses: actions/checkout@v4
@@ -66,43 +74,52 @@ jobs:
             DIRS=$(ls -d examples/*/ 2>/dev/null | sed 's|/$||')
           fi
 
-          NODE_EX="" PYTHON_EX="" GO_EX="" JAVA_EX="" MD_FILES=""
+          NODE_EX="" PYTHON_EX="" GO_EX="" JAVA_EX="" RUST_EX="" DOTNET_EX="" CLI_EX="" MD_FILES=""
 
           for dir in $DIRS; do
             [ ! -d "$dir" ] && continue
-            [ -f "${dir}/package.json" ]    && NODE_EX="${NODE_EX} ${dir}"
-            [ -f "${dir}/requirements.txt" ] && PYTHON_EX="${PYTHON_EX} ${dir}"
-            [ -f "${dir}/pyproject.toml" ]  && PYTHON_EX="${PYTHON_EX} ${dir}"
-            [ -f "${dir}/go.mod" ]          && GO_EX="${GO_EX} ${dir}"
-            [ -f "${dir}/pom.xml" ]         && JAVA_EX="${JAVA_EX} ${dir}"
-            [ -f "${dir}/build.gradle" ]    && JAVA_EX="${JAVA_EX} ${dir}"
-            [ -f "${dir}/README.md" ]       && MD_FILES="${MD_FILES} ${dir}/README.md"
+            [ -f "${dir}/package.json" ]                                && NODE_EX="${NODE_EX} ${dir}"
+            [ -f "${dir}/requirements.txt" ]                            && PYTHON_EX="${PYTHON_EX} ${dir}"
+            [ -f "${dir}/pyproject.toml" ]                              && PYTHON_EX="${PYTHON_EX} ${dir}"
+            [ -f "${dir}/go.mod" ]                                      && GO_EX="${GO_EX} ${dir}"
+            [ -f "${dir}/pom.xml" ] || [ -f "${dir}/build.gradle" ]    && JAVA_EX="${JAVA_EX} ${dir}"
+            [ -f "${dir}/Cargo.toml" ]                                  && RUST_EX="${RUST_EX} ${dir}"
+            ls "${dir}"/*.csproj "${dir}"/*.sln 2>/dev/null | grep -q . && DOTNET_EX="${DOTNET_EX} ${dir}"
+            [ -f "${dir}/example.sh" ] || ls "${dir}"/src/*.sh 2>/dev/null | grep -q . && CLI_EX="${CLI_EX} ${dir}"
+            [ -f "${dir}/README.md" ]                                   && MD_FILES="${MD_FILES} ${dir}/README.md"
           done
 
-          NODE_EX=$(echo $NODE_EX | xargs)
-          PYTHON_EX=$(echo $PYTHON_EX | xargs)
-          GO_EX=$(echo $GO_EX | xargs)
-          JAVA_EX=$(echo $JAVA_EX | xargs)
-          MD_FILES=$(echo $MD_FILES | xargs)
+          for v in NODE_EX PYTHON_EX GO_EX JAVA_EX RUST_EX DOTNET_EX CLI_EX MD_FILES; do
+            eval "$v=\$(echo \${$v} | xargs)"
+          done
 
-          echo "node_examples=$NODE_EX"   >> $GITHUB_OUTPUT
+          echo "node_examples=$NODE_EX"     >> $GITHUB_OUTPUT
           echo "python_examples=$PYTHON_EX" >> $GITHUB_OUTPUT
-          echo "go_examples=$GO_EX"       >> $GITHUB_OUTPUT
-          echo "java_examples=$JAVA_EX"   >> $GITHUB_OUTPUT
-          echo "md_files=$MD_FILES"       >> $GITHUB_OUTPUT
+          echo "go_examples=$GO_EX"         >> $GITHUB_OUTPUT
+          echo "java_examples=$JAVA_EX"     >> $GITHUB_OUTPUT
+          echo "rust_examples=$RUST_EX"     >> $GITHUB_OUTPUT
+          echo "dotnet_examples=$DOTNET_EX" >> $GITHUB_OUTPUT
+          echo "cli_examples=$CLI_EX"       >> $GITHUB_OUTPUT
+          echo "md_files=$MD_FILES"         >> $GITHUB_OUTPUT
 
           [ -n "$NODE_EX" ]   && echo "has_node=true"   >> $GITHUB_OUTPUT || echo "has_node=false"   >> $GITHUB_OUTPUT
           [ -n "$PYTHON_EX" ] && echo "has_python=true" >> $GITHUB_OUTPUT || echo "has_python=false" >> $GITHUB_OUTPUT
           [ -n "$GO_EX" ]     && echo "has_go=true"     >> $GITHUB_OUTPUT || echo "has_go=false"     >> $GITHUB_OUTPUT
           [ -n "$JAVA_EX" ]   && echo "has_java=true"   >> $GITHUB_OUTPUT || echo "has_java=false"   >> $GITHUB_OUTPUT
+          [ -n "$RUST_EX" ]   && echo "has_rust=true"   >> $GITHUB_OUTPUT || echo "has_rust=false"   >> $GITHUB_OUTPUT
+          [ -n "$DOTNET_EX" ] && echo "has_dotnet=true" >> $GITHUB_OUTPUT || echo "has_dotnet=false" >> $GITHUB_OUTPUT
+          [ -n "$CLI_EX" ]    && echo "has_cli=true"    >> $GITHUB_OUTPUT || echo "has_cli=false"    >> $GITHUB_OUTPUT
           [ -n "$MD_FILES" ]  && echo "has_md=true"     >> $GITHUB_OUTPUT || echo "has_md=false"     >> $GITHUB_OUTPUT
 
           echo ""
-          echo "Node examples:   ${NODE_EX:-none}"
-          echo "Python examples: ${PYTHON_EX:-none}"
-          echo "Go examples:     ${GO_EX:-none}"
-          echo "Java examples:   ${JAVA_EX:-none}"
-          echo "Markdown files:  ${MD_FILES:-none}"
+          echo "Node:    ${NODE_EX:-none}"
+          echo "Python:  ${PYTHON_EX:-none}"
+          echo "Go:      ${GO_EX:-none}"
+          echo "Java:    ${JAVA_EX:-none}"
+          echo "Rust:    ${RUST_EX:-none}"
+          echo ".NET:    ${DOTNET_EX:-none}"
+          echo "CLI:     ${CLI_EX:-none}"
+          echo "Markdown:${MD_FILES:-none}"
 
   # ── Node.js ─────────────────────────────────────────────────────────────────
   test-node:
@@ -350,6 +367,141 @@ jobs:
           echo "missing=$MISSING" >> $GITHUB_OUTPUT
           [ -n "$FAILED" ] && exit 1 || exit 0
 
+  # ── Rust ─────────────────────────────────────────────────────────────────────
+  test-rust:
+    needs: detect
+    if: needs.detect.outputs.has_rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || '' }}
+          fetch-depth: 0
+      - name: Run Rust tests
+        id: test
+        continue-on-error: true
+        env:
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+        run: |
+          FAILED="" MISSING=""
+          for dir in ${{ needs.detect.outputs.rust_examples }}; do
+            echo ""; echo "── $dir ──"
+            pushd "$dir" > /dev/null
+            MISSING_VARS=""
+            if [ -f ".env.example" ]; then
+              while IFS= read -r line; do
+                [[ -z "${line// }" || "$line" == \#* ]] && continue
+                VAR="${line%%=*}"; VAR="${VAR// /}"
+                [ -z "$VAR" ] && continue
+                [ -z "${!VAR+x}" ] || [ -z "${!VAR}" ] && MISSING_VARS="$MISSING_VARS $VAR"
+              done < ".env.example"
+            fi
+            if [ -n "$MISSING_VARS" ]; then
+              echo "⏳ MISSING_CREDENTIALS:$(echo $MISSING_VARS | tr ' ' ',')"
+              MISSING="$MISSING $dir"; popd > /dev/null; continue
+            fi
+            cargo test && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            popd > /dev/null
+          done
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          [ -n "$FAILED" ] && exit 1 || exit 0
+
+  # ── .NET ─────────────────────────────────────────────────────────────────────
+  test-dotnet:
+    needs: detect
+    if: needs.detect.outputs.has_dotnet == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || '' }}
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+      - name: Run .NET tests
+        id: test
+        continue-on-error: true
+        env:
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+        run: |
+          FAILED="" MISSING=""
+          for dir in ${{ needs.detect.outputs.dotnet_examples }}; do
+            echo ""; echo "── $dir ──"
+            pushd "$dir" > /dev/null
+            MISSING_VARS=""
+            if [ -f ".env.example" ]; then
+              while IFS= read -r line; do
+                [[ -z "${line// }" || "$line" == \#* ]] && continue
+                VAR="${line%%=*}"; VAR="${VAR// /}"
+                [ -z "$VAR" ] && continue
+                [ -z "${!VAR+x}" ] || [ -z "${!VAR}" ] && MISSING_VARS="$MISSING_VARS $VAR"
+              done < ".env.example"
+            fi
+            if [ -n "$MISSING_VARS" ]; then
+              echo "⏳ MISSING_CREDENTIALS:$(echo $MISSING_VARS | tr ' ' ',')"
+              MISSING="$MISSING $dir"; popd > /dev/null; continue
+            fi
+            dotnet test && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            popd > /dev/null
+          done
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          [ -n "$FAILED" ] && exit 1 || exit 0
+
+  # ── CLI (Deepgram CLI — installed via install.sh) ────────────────────────────
+  test-cli:
+    needs: detect
+    if: needs.detect.outputs.has_cli == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || '' }}
+          fetch-depth: 0
+
+      - name: Install Deepgram CLI
+        run: |
+          curl -fsSL https://deepgram.com/install.sh | sh
+          # Ensure CLI is on PATH
+          echo "$HOME/.deepgram/bin" >> $GITHUB_PATH
+          echo "/usr/local/bin"      >> $GITHUB_PATH
+
+      - name: Run CLI tests
+        id: test
+        continue-on-error: true
+        env:
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+        run: |
+          FAILED="" MISSING=""
+          for dir in ${{ needs.detect.outputs.cli_examples }}; do
+            echo ""; echo "── $dir ──"
+            pushd "$dir" > /dev/null
+            MISSING_VARS=""
+            if [ -f ".env.example" ]; then
+              while IFS= read -r line; do
+                [[ -z "${line// }" || "$line" == \#* ]] && continue
+                VAR="${line%%=*}"; VAR="${VAR// /}"
+                [ -z "$VAR" ] && continue
+                [ -z "${!VAR+x}" ] || [ -z "${!VAR}" ] && MISSING_VARS="$MISSING_VARS $VAR"
+              done < ".env.example"
+            fi
+            if [ -n "$MISSING_VARS" ]; then
+              echo "⏳ MISSING_CREDENTIALS:$(echo $MISSING_VARS | tr ' ' ',')"
+              MISSING="$MISSING $dir"; popd > /dev/null; continue
+            fi
+            # Run example_test.sh if present, otherwise run example.sh directly
+            if [ -f "example_test.sh" ]; then
+              bash example_test.sh && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            elif [ -f "example.sh" ]; then
+              bash example.sh && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            else
+              bash "$(ls src/*.sh | head -1)" && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            fi
+            popd > /dev/null
+          done
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          [ -n "$FAILED" ] && exit 1 || exit 0
+
   # ── Markdown lint (auto-fix, always passes) ──────────────────────────────────
   lint-md:
     needs: detect
@@ -394,7 +546,7 @@ jobs:
   # Runs after all language jobs regardless of their outcome.
   # Fails only if a language job actually failed (not skipped, not missing-creds).
   e2e-api-check:
-    needs: [detect, test-node, test-python, test-go, test-java, lint-md]
+    needs: [detect, test-node, test-python, test-go, test-java, test-rust, test-dotnet, test-cli, lint-md]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -404,20 +556,23 @@ jobs:
           PYTHON="${{ needs.test-python.result }}"
           GO="${{ needs.test-go.result }}"
           JAVA="${{ needs.test-java.result }}"
-          LINT="${{ needs.lint-md.result }}"
+          RUST="${{ needs.test-rust.result }}"
+          DOTNET="${{ needs.test-dotnet.result }}"
+          CLI="${{ needs.test-cli.result }}"
 
-          echo "node:   $NODE"
-          echo "python: $PYTHON"
-          echo "go:     $GO"
-          echo "java:   $JAVA"
-          echo "lint:   $LINT"
+          printf "%-8s %s\n" "node:"   "$NODE"
+          printf "%-8s %s\n" "python:" "$PYTHON"
+          printf "%-8s %s\n" "go:"     "$GO"
+          printf "%-8s %s\n" "java:"   "$JAVA"
+          printf "%-8s %s\n" "rust:"   "$RUST"
+          printf "%-8s %s\n" "dotnet:" "$DOTNET"
+          printf "%-8s %s\n" "cli:"    "$CLI"
 
-          # 'skipped' = no examples of that language — that's fine
-          # 'success' = tests passed
-          # 'failure' = real test failures — block merge
-          # 'cancelled' = workflow was cancelled — block merge
+          # skipped = no examples of that language — fine
+          # success = tests passed — fine
+          # failure / cancelled = block merge
           FAILED=false
-          for result in "$NODE" "$PYTHON" "$GO" "$JAVA"; do
+          for result in "$NODE" "$PYTHON" "$GO" "$JAVA" "$RUST" "$DOTNET" "$CLI"; do
             [ "$result" = "failure" ]   && FAILED=true
             [ "$result" = "cancelled" ] && FAILED=true
           done
@@ -426,6 +581,6 @@ jobs:
             echo "❌ One or more test jobs failed — blocking merge"
             exit 1
           else
-            echo "✅ All applicable tests passed (skipped jobs had no examples to test)"
+            echo "✅ All applicable tests passed (skipped = no examples of that language)"
             exit 0
           fi
