@@ -1,93 +1,14 @@
 # Contributing
 
-This repo is primarily maintained by autonomous agents, but humans can direct and override agent decisions at any time.
+## Core requirement
 
-## Requesting a new example
+**Every example must use Deepgram directly or through a partner's tooling/API.**
 
-Use the **Queue: New Example** issue template. The agent picks this up on its next daily run and builds the example.
+This means Deepgram STT, TTS, Voice Agents, or Audio Intelligence must be demonstrably called — either via the Deepgram SDK, or via a partner integration that routes audio through Deepgram (e.g. LiveKit → Deepgram, Pipecat → Deepgram, Twilio → Deepgram WebSocket). Examples that use a competing speech provider, or that merely reference Deepgram without making real API calls, will be rejected.
 
-Alternatively, build it yourself using the [manual contribution](#manual-contribution) process below.
+## What makes a good example
 
-## Reviewing open PRs
-
-The agent raises several PR types. Here's how to evaluate each:
-
-### `type:example` — New example app
-
-**Merge if:** The example is working, well-documented, and demonstrates a real use case.
-
-**Close (reject) if:** The integration is a direct Deepgram competitor (not a partner), the example is trivially simple with no instructional value, or it duplicates an existing example.
-
-**What happens after merge:** The `update-readme` workflow rebuilds the examples table in the root README automatically.
-
-### `type:fix` — Bug fix to existing example
-
-**Merge if:** The fix resolves the reported failure without breaking anything else.
-
-**Close if:** The fix introduces new issues or the original example should be removed instead.
-
-## Rejecting a PR
-
-Close any PR without merging to reject it. Closed-unmerged PRs act as the agent's rejection memory — it will not re-propose the same integration.
-
-To reverse a rejection, reopen the PR or create the example manually.
-
-## Manual contribution
-
-To add an example yourself:
-
-1. Find the next available number:
-   ```bash
-   ls examples/ | sort -n | tail -1
-   # Use that number + 10
-   ```
-
-2. Create the directory following the naming convention:
-   ```bash
-   mkdir -p examples/{NNN}-{slug}/{src,tests}
-   ```
-
-3. Required files:
-   - `README.md` — description, prerequisites, env vars, how to run
-   - `.env.example` — every required env var (no values, just `VAR_NAME=`)
-   - Source code in `src/`
-   - Tests in `tests/` that exit 0 on success, 1 on failure, 2 on missing credentials
-
-4. Branch and PR:
-   ```bash
-   git checkout -b example/{slug}
-   git add examples/{NNN}-{slug}/
-   git commit -m "feat(examples): add {description}"
-   git push origin example/{slug}
-   gh pr create --title "[Example] {description}" \
-     --label "type:example" \
-     --body "..."
-   ```
-
-5. The PR body **must** include a metadata block so agents can parse it:
-   ```html
-   <!-- metadata
-   type: example
-   number: {NNN}
-   slug: {slug}
-   language: {node|python|go|rust|dotnet}
-   products: {stt,tts,agent,intelligence}
-   integrations: {platform or ecosystem slug}
-   -->
-   ```
-
-## Credential handling
-
-If an example requires external service credentials:
-
-1. List all required env vars in `.env.example` (one per line, format: `VAR_NAME=`)
-2. Tests should check for missing vars and exit with code `2` — this signals "missing credentials" to CI, not a real test failure
-3. CI will post a comment tagging `@deepgram-devrel` with the list of needed secrets
-4. The PR stays open until the secrets are added and tests pass
-
-## What can agents build examples for?
-
-**Yes:**
+**In scope:**
 - Partners with a developer API (Twilio, Vonage, Zoom, etc.)
 - AI frameworks and toolkits (LangChain, LlamaIndex, Vercel AI SDK, etc.)
 - Frontend frameworks (React, Vue, Svelte, Next.js, Nuxt, etc.)
@@ -95,52 +16,76 @@ If an example requires external service credentials:
 - Backend frameworks (FastAPI, Express, Gin, etc.)
 - Platforms and clouds (AWS, GCP, Azure serverless, etc.)
 
-**No:**
-- Direct Deepgram competitors that don't use our APIs (AssemblyAI, ElevenLabs standalone, etc.)
-- Trivial "hello world" examples with no real integration
+**Out of scope:**
+- Direct Deepgram competitors that don't use our APIs
+- Trivial examples with no real integration value
 - Duplicate integrations (check existing examples and open PRs first)
 
-## Queueing work manually
+## Reviewing PRs
 
-Use the GitHub Issue templates:
+### `type:example` — New example
 
-| Template | Effect |
-|----------|--------|
-| **Queue: New Example** | Agent builds an example for a specific integration |
-| **Report: Broken Example** | Agent investigates and fixes a failing example |
+**Merge if:** Working, well-documented, demonstrates a real Deepgram use case.
 
-## Running agents locally
+**Close if:** Doesn't make real Deepgram API calls, uses a competing provider, is trivially simple, or duplicates an existing example.
 
-```bash
-# Requires: ANTHROPIC_API_KEY set, gh auth login done, git configured
-claude --model claude-opus-4-6 -p "$(cat instructions/discover-examples.md)"
-claude --model claude-opus-4-6 -p "$(cat instructions/create-example.md)"
-```
+### `type:fix` — Bug fix
 
-## File structure reference
+**Merge if:** Resolves the failure without breaking anything else.
+
+**Close if:** Introduces new issues or the original example should be removed instead.
+
+## Manual contribution
+
+1. Find the next available number:
+   ```bash
+   ls examples/ | sort -n | tail -1
+   # Use that number + 10
+   ```
+
+2. Create the directory:
+   ```bash
+   mkdir -p examples/{NNN}-{slug}/{src,tests}
+   ```
+
+3. Required files:
+   - `README.md` — what it does, prerequisites, env vars, how to run
+   - `.env.example` — every required env var (no values, just `VAR_NAME=`)
+   - Source code in `src/`
+   - Tests in `tests/` — exit 0 pass, 1 fail, 2 missing credentials
+
+4. Open a PR:
+   ```bash
+   git checkout -b example/{NNN}-{slug}
+   git add examples/{NNN}-{slug}/
+   git commit -m "feat(examples): add {description}"
+   git push origin example/{NNN}-{slug}
+   gh pr create --title "[Example] {NNN} — {description}" --label "type:example"
+   ```
+
+## Credential handling
+
+If an example requires external service credentials:
+
+1. List all required env vars in `.env.example`
+2. Tests must check for missing vars and exit `2` — CI treats this as "skipped", not "failed"
+3. CI will comment with the list of secrets needed
+4. The PR stays open until secrets are added and tests pass
+
+## Numbering convention
+
+Examples are numbered globally in increments of 10. A platform owns its group — a second Twilio example gets `021`, not a new slot. New platforms claim the next free multiple of 10.
+
+## File structure
 
 ```
 examples/
-  {NNN}-{slug}/           # Three-digit number + kebab-case slug
+  {NNN}-{slug}/
     README.md             # Required
     .env.example          # Required if any env vars needed
     src/                  # Source code
-    tests/                # Tests with credential-checking convention
-
-instructions/             # Agent prompts — humans can edit these
-  discover-examples.md    # How agents find new integration ideas
-  create-example.md       # How agents build examples
-  review-example.md       # How agents review PRs
-  fix-example.md          # How agents fix failing tests
+    tests/                # Tests (exit 0/1/2 convention)
 
 .github/
-  workflows/
-    discover-examples.yml  # Weekly: search for new ideas, queue PRs
-    create-example.yml     # Daily + on issue: build queued examples
-    review-pr.yml          # On PR open/sync: self-review
-    fix-pr.yml             # On status:fix-needed label: repair tests
-    test-node.yml          # Node.js test runner
-    test-python.yml        # Python test runner
-    test-go.yml            # Go test runner
-    update-readme.yml      # On merge: rebuild examples table
+  workflows/              # CI workflows
 ```
