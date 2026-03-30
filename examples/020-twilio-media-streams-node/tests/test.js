@@ -32,9 +32,21 @@ const TMP_MULAW  = '/tmp/twilio_test.mulaw';
 // We use 320 to match Twilio's actual observed frame size.
 const CHUNK_SIZE = 320;
 
-// Convert a known audio file to μ-law 8 kHz using ffmpeg.
-// ffmpeg is pre-installed on all GitHub Actions ubuntu runners.
+function ensureFfmpeg() {
+  try {
+    execSync('which ffmpeg', { stdio: 'pipe' });
+  } catch {
+    console.log('ffmpeg not found — installing via apt-get...');
+    execSync('sudo apt-get update -qq && sudo apt-get install -qq -y ffmpeg', {
+      stdio: 'pipe',
+      timeout: 60_000,
+    });
+  }
+}
+
 function prepareMulawAudio() {
+  ensureFfmpeg();
+
   console.log('Downloading test audio...');
   execSync(`curl -s -L -o "${TMP_WAV}" "${AUDIO_URL}"`, { stdio: 'pipe' });
 
@@ -44,8 +56,11 @@ function prepareMulawAudio() {
     '-ar', '8000', '-ac', '1', '-f', 'mulaw', TMP_MULAW,
   ], { stdio: 'pipe' });
 
+  if (result.error) {
+    throw new Error(`ffmpeg spawn error: ${result.error.message}`);
+  }
   if (result.status !== 0) {
-    throw new Error(`ffmpeg failed: ${result.stderr.toString().slice(0, 300)}`);
+    throw new Error(`ffmpeg failed: ${(result.stderr || Buffer.alloc(0)).toString().slice(0, 300)}`);
   }
 
   const audio = fs.readFileSync(TMP_MULAW);
