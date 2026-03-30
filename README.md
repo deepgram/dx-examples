@@ -35,7 +35,7 @@ PRs requiring partner credentials stay open with a `⏸` comment until secrets a
 | [100](examples/100-fastapi-audio-transcription-python/) | FastAPI Audio Transcription API | Python | FastAPI | ❌ failing |
 | [110](examples/110-cloudflare-worker-transcription-js/) | Cloudflare Worker — Edge Audio Transcription | Node.js | Cloudflare | ✅ passing |
 | [120](examples/120-slack-transcribe-bot-node/) | Slack Bot — Auto-Transcribe Audio Messages with Deepgram | Node.js | Slack | ✅ passing |
-| [130](examples/130-telegram-bot-python/) | Telegram Voice Transcription Bot | Python | Telegram | ⏳ needs credentials |
+| [130](examples/130-telegram-bot-python/) | Telegram Voice Transcription Bot | Python | Telegram | ❌ failing |
 | [140](examples/140-audio-to-subtitles-python/) | Audio to Subtitles CLI | Python | Deepgram SDK | ❌ failing |
 | [150](examples/140-flutter-voice-transcription-dart/) | Flutter Voice Transcription | Dart | Flutter | — |
 <!-- examples-table-end -->
