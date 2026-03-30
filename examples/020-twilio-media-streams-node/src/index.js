@@ -54,8 +54,7 @@ function createApp() {
 
     console.log('[media] Twilio WebSocket connected');
 
-    const socket = await deepgram.listen.v1.connect(DEEPGRAM_LIVE_OPTIONS);
-    dgConnection = socket;
+    dgConnection = await deepgram.listen.v1.createConnection(DEEPGRAM_LIVE_OPTIONS);
 
     dgConnection.on('open', () => {
       console.log('[deepgram] Connection opened');
@@ -69,19 +68,16 @@ function createApp() {
       console.log('[deepgram] Connection closed');
     });
 
-    dgConnection.on('message', (msg) => {
-      try {
-        const data = typeof msg === 'string' ? JSON.parse(msg) : msg;
-        const transcript = data?.channel?.alternatives?.[0]?.transcript;
-        if (transcript) {
-          const tag = data.is_final ? 'final' : 'interim';
-          console.log(`[${tag}] ${transcript}`);
-        }
-      } catch {
+    dgConnection.on('message', (data) => {
+      const transcript = data?.channel?.alternatives?.[0]?.transcript;
+      if (transcript) {
+        const tag = data.is_final ? 'final' : 'interim';
+        console.log(`[${tag}] ${transcript}`);
       }
     });
 
     dgConnection.connect();
+    await dgConnection.waitForOpen();
 
     twilioWs.on('message', (raw) => {
       try {
@@ -100,8 +96,7 @@ function createApp() {
           case 'media':
             try {
               if (dgConnection) {
-                const audio = Buffer.from(message.media.payload, 'base64');
-                dgConnection.sendMedia(audio);
+                dgConnection.sendMedia(Buffer.from(message.media.payload, 'base64'));
               }
             } catch {}
 
@@ -110,7 +105,7 @@ function createApp() {
           case 'stop':
             console.log('[twilio] Stream stopped');
             if (dgConnection) {
-              try { dgConnection.sendCloseStream({ type: 'CloseStream' }); } catch {}
+              try { dgConnection.sendFinalize({ type: 'Finalize' }); } catch {}
               try { dgConnection.close(); } catch {}
               dgConnection = null;
             }
@@ -127,7 +122,7 @@ function createApp() {
     twilioWs.on('close', () => {
       console.log('[media] Twilio WebSocket closed');
       if (dgConnection) {
-        try { dgConnection.sendCloseStream({ type: 'CloseStream' }); } catch {}
+        try { dgConnection.sendFinalize({ type: 'Finalize' }); } catch {}
         try { dgConnection.close(); } catch {}
         dgConnection = null;
       }
