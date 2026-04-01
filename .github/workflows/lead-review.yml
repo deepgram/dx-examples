@@ -96,12 +96,14 @@ jobs:
                 continue
               }
               if echo "$MERGE_OUT" | grep -q "Already up to date"; then
-                echo "$BRANCH already up-to-date — dispatching tests"
-                gh workflow run test-examples.yml \
-                  --repo ${{ github.repository }} \
-                  --ref "$BRANCH" -f ref="$BRANCH" || true
+                echo "$BRANCH already up-to-date with main"
               else
                 git push origin "$BRANCH"
-                echo "✓ Merged main into $BRANCH (push trigger fires tests)"
+                echo "✓ Merged main into $BRANCH"
               fi
+              # Always dispatch explicitly — GITHUB_TOKEN pushes don't trigger workflows
+              gh workflow run test-examples.yml \
+                --repo ${{ github.repository }} \
+                --ref "$BRANCH" -f ref="$BRANCH" || true
+              echo "Dispatched tests for $BRANCH"
             done

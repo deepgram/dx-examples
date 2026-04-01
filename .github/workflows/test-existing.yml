@@ -279,7 +279,10 @@ jobs:
                            || echo "has_failures=false" >> $GITHUB_OUTPUT
           echo "failed_examples=${FAILED}" >> $GITHUB_OUTPUT
 
-  # ── Report failures + fix ───────────────────────────────────────────────────
+  # ── Report failures + fix (one at a time) ──────────────────────────────────
+  # Pick the first failing example that has no open fix PR, open one issue for
+  # it, and run the fix agent for that single example only. Each subsequent
+  # test-existing run advances the queue by one.
   report:
     needs: [node, python, go, java]
     if: always()
@@ -298,49 +301,76 @@ jobs:
         id: date
         run: echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
-      - name: Collect failures
+      - name: Pick first unaddressed failure
         id: collect
-        run: |
-          ALL_FAILED=""
-          [ "${{ needs.node.outputs.has_failures }}" = "true" ] && \
-            ALL_FAILED="$ALL_FAILED Node:[${{ needs.node.outputs.failed_examples }}]"
-          [ "${{ needs.python.outputs.has_failures }}" = "true" ] && \
-            ALL_FAILED="$ALL_FAILED Python:[${{ needs.python.outputs.failed_examples }}]"
-          [ "${{ needs.go.outputs.has_failures }}" = "true" ] && \
-            ALL_FAILED="$ALL_FAILED Go:[${{ needs.go.outputs.failed_examples }}]"
-          [ "${{ needs.java.outputs.has_failures }}" = "true" ] && \
-            ALL_FAILED="$ALL_FAILED Java:[${{ needs.java.outputs.failed_examples }}]"
-
-          [ -n "$ALL_FAILED" ] && echo "has_failures=true" >> $GITHUB_OUTPUT \
-                               || echo "has_failures=false" >> $GITHUB_OUTPUT
-          echo "all_failed=${ALL_FAILED}" >> $GITHUB_OUTPUT
-
-      - name: Open tracking issue
-        if: steps.collect.outputs.has_failures == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TODAY=${{ steps.date.outputs.date }}
+          # Flatten all failures into a space-separated list of example dirs
+          ALL_FAILED=""
+          [ "${{ needs.node.outputs.has_failures }}"   = "true" ] && \
+            ALL_FAILED="$ALL_FAILED ${{ needs.node.outputs.failed_examples }}"
+          [ "${{ needs.python.outputs.has_failures }}" = "true" ] && \
+            ALL_FAILED="$ALL_FAILED ${{ needs.python.outputs.failed_examples }}"
+          [ "${{ needs.go.outputs.has_failures }}"     = "true" ] && \
+            ALL_FAILED="$ALL_FAILED ${{ needs.go.outputs.failed_examples }}"
+          [ "${{ needs.java.outputs.has_failures }}"   = "true" ] && \
+            ALL_FAILED="$ALL_FAILED ${{ needs.java.outputs.failed_examples }}"
+          ALL_FAILED=$(echo "$ALL_FAILED" | xargs | tr ' ' '\n' | sort -u | xargs)
+
+          TARGET=""
+          TARGET_SLUG=""
+          for EXAMPLE in $ALL_FAILED; do
+            SLUG=$(basename "${EXAMPLE%/}")
+            # Skip if a fix PR is already open for this example
+            OPEN=$(gh pr list --repo ${{ github.repository }} --state open \
+              --search "$SLUG" --json number --jq 'length' 2>/dev/null || echo "0")
+            if [ "$OPEN" = "0" ]; then
+              TARGET="$EXAMPLE"
+              TARGET_SLUG="$SLUG"
+              echo "Selected: $EXAMPLE (no open fix PR)"
+              break
+            else
+              echo "Skipping $EXAMPLE — fix PR already open"
+            fi
+          done
+
+          if [ -n "$TARGET" ]; then
+            echo "has_target=true"  >> $GITHUB_OUTPUT
+            echo "target=$TARGET"   >> $GITHUB_OUTPUT
+            echo "slug=$TARGET_SLUG" >> $GITHUB_OUTPUT
+          else
+            echo "has_target=false" >> $GITHUB_OUTPUT
+            [ -n "$ALL_FAILED" ] && echo "All failures already have open fix PRs — nothing to do"
+          fi
+
+      - name: Open issue for this failure
+        if: steps.collect.outputs.has_target == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SLUG="${{ steps.collect.outputs.slug }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
           EXISTING=$(gh issue list --repo ${{ github.repository }} \
             --label "queue:fix-example" --state open \
-            --search "Scheduled test failures ${TODAY}" \
+            --search "[Regression] $SLUG" \
             --json number --jq '.[0].number')
 
           if [ -n "$EXISTING" ]; then
-            echo "Failure issue #$EXISTING already open — skipping"
-            exit 0
+            echo "Issue already open for $SLUG (#$EXISTING)"
+          else
+            gh issue create \
+              --repo ${{ github.repository }} \
+              --title "[Regression] $SLUG — tests failing" \
+              --label "queue:fix-example" \
+              --label "type:fix" \
+              --body "Regression in \`${{ steps.collect.outputs.target }}\`. Run: $RUN_URL"
+            echo "Created issue for $SLUG"
           fi
 
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          gh issue create \
-            --repo ${{ github.repository }} \
-            --title "Scheduled test failures — ${TODAY}" \
-            --label "queue:fix-example" \
-            --label "type:fix" \
-            --body "Scheduled test failures on ${TODAY}. Fix agent investigating. Run: ${RUN_URL}"
-
-      - name: Run fix agent
-        if: steps.collect.outputs.has_failures == 'true'
+      - name: Run fix agent for this failure
+        if: steps.collect.outputs.has_target == 'true'
         uses: anthropics/claude-code-action@beta
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
@@ -352,18 +382,17 @@ jobs:
           model: claude-opus-4-6
           allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"
           direct_prompt: |
-            The scheduled test run found regressions in existing merged examples.
-            Failed examples: ${{ steps.collect.outputs.all_failed }}
+            One regression detected in a merged example. Fix it.
+            Failing example: ${{ steps.collect.outputs.target }}
 
-            For each failing example:
             1. Read the example's source and tests
             2. Search Kapa for current correct SDK usage (instructions/kapa-search.md)
             3. Identify the root cause (outdated SDK, deprecated API, dependency change)
             4. Fix the code
             5. Create a branch and PR:
-               - Branch: fix/{slug}-regression-${{ steps.date.outputs.date }}
+               - Branch: fix/${{ steps.collect.outputs.slug }}-regression-${{ steps.date.outputs.date }}
                - Label: type:fix
-               - Title: [Fix] {NNN}-{slug} — {brief description}
+               - Title: [Fix] {NNN}-${{ steps.collect.outputs.slug }} — {brief description}
                - Enable auto-merge: gh pr merge {number} --auto --squash
 
             Today's date: ${{ steps.date.outputs.date }}
