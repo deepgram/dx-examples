@@ -119,7 +119,7 @@ git diff --quiet README.md && echo "README unchanged" && exit 0
 
 ---
 
-## Step 4: Open PR and auto-merge
+## Step 4: Open PR
 
 ```bash
 DATE=$(date -u +%Y-%m-%d-%H%M)
@@ -147,6 +147,5 @@ gh api "repos/${{ github.repository }}/statuses/${SHA}" \
   -f description="README-only change — no examples to test" \
   -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-gh pr merge "$PR_NUMBER" --auto --squash
 echo "PR: $PR_URL"
 ```
