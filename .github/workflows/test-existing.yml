@@ -52,6 +52,8 @@ jobs:
           VONAGE_APPLICATION_ID: ${{ secrets.VONAGE_APPLICATION_ID }}
           VONAGE_PRIVATE_KEY: ${{ secrets.VONAGE_PRIVATE_KEY }}
           DAILY_API_KEY: ${{ secrets.DAILY_API_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_TOKEN: ${{ secrets.SLACK_APP_TOKEN }}
         run: |
           FAILED=""
           for dir in examples/*/; do
@@ -111,6 +113,7 @@ jobs:
           VONAGE_APPLICATION_ID: ${{ secrets.VONAGE_APPLICATION_ID }}
           VONAGE_PRIVATE_KEY: ${{ secrets.VONAGE_PRIVATE_KEY }}
           DAILY_API_KEY: ${{ secrets.DAILY_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           FAILED=""
           for dir in examples/*/; do
@@ -361,7 +364,7 @@ jobs:
                - Branch: fix/{slug}-regression-${{ steps.date.outputs.date }}
                - Label: type:fix
                - Title: [Fix] {NNN}-{slug} — {brief description}
-               - Do NOT enable auto-merge — process-open-prs.yml handles merge after tests pass
+               - Enable auto-merge: gh pr merge {number} --auto --squash
 
             Today's date: ${{ steps.date.outputs.date }}
             Repository: ${{ github.repository }}

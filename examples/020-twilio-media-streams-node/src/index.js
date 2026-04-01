@@ -36,48 +36,21 @@ function createApp() {
     const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'wss' : 'ws';
     const streamUrl = `${protocol}://${host}/media`;
 
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>This call is being transcribed by Deepgram.</Say>
-  <Connect>
-    <Stream url="${streamUrl}" />
-  </Connect>
-</Response>`;
+    const response = new twilio.twiml.VoiceResponse();
+    response.say('This call is being transcribed by Deepgram.');
+    response.connect().stream({ url: streamUrl });
 
-    res.type('text/xml').send(twiml);
+    res.type('text/xml').send(response.toString());
     console.log(`[voice] New call → streaming to ${streamUrl}`);
   });
 
-  app.ws('/media', async (twilioWs) => {
+  app.ws('/media', (twilioWs) => {
     let dgConnection = null;
+    let dgReady = false;
     let streamSid = null;
+    const mediaQueue = [];
 
     console.log('[media] Twilio WebSocket connected');
-
-    dgConnection = await deepgram.listen.v1.createConnection(DEEPGRAM_LIVE_OPTIONS);
-
-    dgConnection.on('open', () => {
-      console.log('[deepgram] Connection opened');
-    });
-
-    dgConnection.on('error', (err) => {
-      console.error('[deepgram] Error:', err.message);
-    });
-
-    dgConnection.on('close', () => {
-      console.log('[deepgram] Connection closed');
-    });
-
-    dgConnection.on('message', (data) => {
-      const transcript = data?.channel?.alternatives?.[0]?.transcript;
-      if (transcript) {
-        const tag = data.is_final ? 'final' : 'interim';
-        console.log(`[${tag}] ${transcript}`);
-      }
-    });
-
-    dgConnection.connect();
-    await dgConnection.waitForOpen();
 
     twilioWs.on('message', (raw) => {
       try {
@@ -94,21 +67,23 @@ function createApp() {
             break;
 
           case 'media':
-            try {
-              if (dgConnection) {
+            if (dgReady && dgConnection) {
+              try {
                 dgConnection.sendMedia(Buffer.from(message.media.payload, 'base64'));
-              }
-            } catch {}
-
+              } catch {}
+            } else {
+              mediaQueue.push(message.media.payload);
+            }
             break;
 
           case 'stop':
             console.log('[twilio] Stream stopped');
             if (dgConnection) {
-              try { dgConnection.sendFinalize({ type: 'Finalize' }); } catch {}
+              try { dgConnection.sendCloseStream({ type: 'CloseStream' }); } catch {}
               try { dgConnection.close(); } catch {}
               dgConnection = null;
             }
+            twilioWs.close();
             break;
 
           default:
@@ -122,7 +97,7 @@ function createApp() {
     twilioWs.on('close', () => {
       console.log('[media] Twilio WebSocket closed');
       if (dgConnection) {
-        try { dgConnection.sendFinalize({ type: 'Finalize' }); } catch {}
+        try { dgConnection.sendCloseStream({ type: 'CloseStream' }); } catch {}
         try { dgConnection.close(); } catch {}
         dgConnection = null;
       }
@@ -134,6 +109,44 @@ function createApp() {
         try { dgConnection.close(); } catch {}
         dgConnection = null;
       }
+    });
+
+    (async () => {
+      dgConnection = await deepgram.listen.v1.connect(DEEPGRAM_LIVE_OPTIONS);
+
+      dgConnection.on('open', () => {
+        console.log('[deepgram] Connection opened');
+        dgReady = true;
+        for (const payload of mediaQueue) {
+          try {
+            dgConnection.sendMedia(Buffer.from(payload, 'base64'));
+          } catch {}
+        }
+        mediaQueue.length = 0;
+      });
+
+      dgConnection.on('error', (err) => {
+        console.error('[deepgram] Error:', err.message);
+        dgReady = false;
+      });
+
+      dgConnection.on('close', () => {
+        console.log('[deepgram] Connection closed');
+        dgReady = false;
+      });
+
+      dgConnection.on('message', (data) => {
+        const transcript = data?.channel?.alternatives?.[0]?.transcript;
+        if (transcript) {
+          const tag = data.is_final ? 'final' : 'interim';
+          console.log(`[${tag}] ${transcript}`);
+        }
+      });
+
+      dgConnection.connect();
+      await dgConnection.waitForOpen();
+    })().catch((err) => {
+      console.error('[deepgram] Setup failed:', err.message);
     });
   });
 

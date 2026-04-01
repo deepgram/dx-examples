@@ -26,7 +26,7 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [150](examples/150-flutter-voice-transcription-dart/) | Flutter Voice Transcription | Dart | Flutter | — |
 <!-- examples-table-end -->
 
-*Status last updated 2026-03-31.*
+*Status last updated 2026-04-01.*
 
 ## CI / testing
 
