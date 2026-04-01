@@ -119,10 +119,10 @@ function testWebSocketTranscription(port, audioData) {
 
     const timeout = setTimeout(() => {
       reject(new Error(
-        'Timed out (30s) waiting for Deepgram transcript.\n' +
+        'Timed out (60s) waiting for Deepgram transcript.\n' +
         'Check DEEPGRAM_API_KEY and connectivity to api.deepgram.com.',
       ));
-    }, 30_000);
+    }, 60_000);
 
     const ws = new WebSocket(`ws://localhost:${port}/listen`);
 
@@ -144,13 +144,15 @@ function testWebSocketTranscription(port, audioData) {
 
     ws.on('open', () => {
       let offset = 0;
-      const MAX_BYTES = 16000 * 2 * 10; // 10 seconds of 16 kHz 16-bit mono
+      const MAX_BYTES = 16000 * 2 * 30; // 30 seconds of 16 kHz 16-bit mono
       let settled = false;
+      let doneSending = false;
 
       const settle = () => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
+        try { ws.close(); } catch {}
         if (transcripts.length === 0) {
           reject(new Error(
             'No transcripts received from Deepgram after streaming audio.\n' +
@@ -165,10 +167,10 @@ function testWebSocketTranscription(port, audioData) {
         if (ws.readyState !== WebSocket.OPEN) return;
 
         if (offset >= audioData.length || offset >= MAX_BYTES) {
-          setTimeout(() => {
-            try { ws.close(); } catch {}
-            setTimeout(settle, 2000);
-          }, 500);
+          doneSending = true;
+          if (transcripts.length > 0) {
+            setTimeout(settle, 1000);
+          }
           return;
         }
 
@@ -176,6 +178,12 @@ function testWebSocketTranscription(port, audioData) {
         offset += CHUNK_SIZE;
         setTimeout(sendChunk, 20);
       };
+
+      ws.on('message', () => {
+        if (doneSending && transcripts.length > 0) {
+          setTimeout(settle, 1000);
+        }
+      });
 
       setTimeout(sendChunk, 500);
     });
@@ -186,7 +194,7 @@ function testWebSocketTranscription(port, audioData) {
           clearTimeout(timeout);
           resolve(transcripts);
         }
-      }, 2000);
+      }, 1000);
     });
   });
 }
@@ -207,7 +215,7 @@ async function run() {
     await testHealthEndpoint(PORT);
     await testStaticServing(PORT);
 
-    console.log('\nStreaming audio through WebSocket -> Deepgram (up to 30 s)...');
+    console.log('\nStreaming audio through WebSocket -> Deepgram (up to 60 s)...');
     const transcripts = await testWebSocketTranscription(PORT, audioData);
 
     console.log(`\nReceived ${transcripts.length} transcript event(s)`);

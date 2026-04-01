@@ -52,7 +52,7 @@ function createApp() {
 
       if (dgReady && dgConnection) {
         try {
-          dgConnection.send(data);
+          dgConnection.sendBinary(data);
         } catch {}
       } else {
         mediaQueue.push(data);
@@ -83,7 +83,7 @@ function createApp() {
         console.log('[deepgram] Connection opened');
         dgReady = true;
         for (const chunk of mediaQueue) {
-          try { dgConnection.send(chunk); } catch {}
+          try { dgConnection.sendBinary(chunk); } catch {}
         }
         mediaQueue.length = 0;
       });
@@ -96,6 +96,7 @@ function createApp() {
       dgConnection.on('close', () => {
         console.log('[deepgram] Connection closed');
         dgReady = false;
+        dgConnection = null;
       });
 
       dgConnection.on('message', (data) => {
