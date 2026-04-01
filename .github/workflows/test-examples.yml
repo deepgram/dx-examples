@@ -19,6 +19,12 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'examples/**'
+  push:
+    branches:
+      - 'example/**'
+      - 'fix/**'
+    paths:
+      - 'examples/**'
   workflow_dispatch:
     inputs:
       ref:
@@ -31,7 +37,7 @@ on:
         default: ''
 
 concurrency:
-  group: test-examples-${{ github.event.pull_request.number || inputs.ref }}-${{ inputs.example || 'all' }}
+  group: test-examples-${{ github.event.pull_request.head.ref || github.ref_name || inputs.ref }}-${{ inputs.example || 'all' }}
   cancel-in-progress: true
 
 permissions:
@@ -70,8 +76,12 @@ jobs:
       - name: Scan changed example directories
         id: scan
         run: |
-          # On PR: only dirs changed in this PR. On dispatch: all dirs, or a single example if specified.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # On PR/push/dispatch-to-branch: only dirs changed vs main.
+          # On dispatch-to-main: all dirs, or a single example if specified.
+          REF="${{ inputs.ref }}"
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "push" ] || \
+             ( [ "$EVENT" = "workflow_dispatch" ] && [ -n "$REF" ] && [ "$REF" != "main" ] ); then
             DIRS=$(git diff origin/main...HEAD --name-only 2>/dev/null \
               | grep '^examples/' | cut -d/ -f1-2 | sort -u | grep -v '^\s*$')
           elif [ -n "${{ inputs.example }}" ]; then
