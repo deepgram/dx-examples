@@ -177,16 +177,20 @@ EOF
 Only merge if ALL of the following are true:
 - `status:review-passed` label present
 - No `status:fix-needed` or `status:needs-credentials` labels
-- `e2e-api-check` check is **explicitly present and SUCCESS** — a missing or empty rollup means tests have not run yet; do NOT merge
+- `e2e-api-check` is **explicitly SUCCESS on the PR's HEAD commit**
+
+> NOTE: `statusCheckRollup` is empty for workflow_dispatch-triggered runs.
+> Always use the Checks API directly — it is the only reliable source.
 
 ```bash
-# Re-read check state immediately before merging
-CHECKS=$(gh pr view {number} --json statusCheckRollup --jq '.statusCheckRollup')
+# Get HEAD commit SHA for the PR
+HEAD_SHA=$(gh pr view {number} --repo {repo} --json headRefOid --jq '.headRefOid')
 
-# Require e2e-api-check to be explicitly SUCCESS — empty rollup = not tested = do not merge
-E2E=$(echo "$CHECKS" | jq -r '[.[] | select(.context == "e2e-api-check")] | .[0].conclusion // "missing"')
+# Query check runs on the HEAD commit directly — works for workflow_dispatch runs
+E2E=$(gh api "repos/{repo}/commits/${HEAD_SHA}/check-runs" \
+  --jq '[.check_runs[] | select(.name == "e2e-api-check")] | .[0].conclusion // "missing"')
 
-if [ "$E2E" != "SUCCESS" ]; then
+if [ "$E2E" != "success" ]; then
   echo "PR #{number}: waiting for e2e-api-check (currently: $E2E)"
 else
   echo "PR #{number}: e2e-api-check passed — merging"
