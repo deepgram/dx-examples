@@ -19,7 +19,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'examples/**'
-workflow_dispatch:
+  workflow_dispatch:
     inputs:
       ref:
         description: 'Branch or SHA to test (default: main)'
