@@ -195,8 +195,8 @@ function testMediaStreamFlow(port, audioData) {
         if (ws.readyState !== WebSocket.OPEN) return;
 
         if (offset >= audioData.length || offset >= MAX_BYTES) {
-          // 4. "stop" — call ended
           ws.send(JSON.stringify({ event: 'stop', streamSid: 'MZ_ci_test' }));
+          setTimeout(() => ws.close(), 500);
           return;
         }
 
