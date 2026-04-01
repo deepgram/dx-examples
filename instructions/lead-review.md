@@ -25,11 +25,14 @@ kapa_search() {
 
 ## Step 1: Find PRs to review
 
+Skip PRs that already have `status:review-passed` — they have been reviewed and do not need
+another pass. Only review PRs that are still pending approval or have `status:fix-needed`.
+
 ```bash
 # On pull_request event: use the specific PR
-# On schedule/dispatch: find all open example PRs without recent review
+# On schedule/dispatch: find open example PRs that have NOT been approved yet
 gh pr list --state open --json number,title,labels,updatedAt \
-  --jq '[.[] | select(.title | test("^\\[(Example|Fix)\\]"))] | sort_by(.updatedAt)'
+  --jq '[.[] | select(.title | test("^\\[(Example|Fix)\\]")) | select((.labels | map(.name)) | contains(["status:review-passed"]) | not)] | sort_by(.updatedAt)'
 ```
 
 Process each PR in order. For each one, read its diff:
@@ -171,22 +174,22 @@ EOF
 
 ## Step 7: Merge passing PRs (sweep mode)
 
-For PRs that have:
-- `status:review-passed` label
-- `e2e-api-check` status = success
+Only merge if ALL of the following are true:
+- `status:review-passed` label present
 - No `status:fix-needed` or `status:needs-credentials` labels
-- PR still OPEN
+- `e2e-api-check` check is **explicitly present and SUCCESS** — a missing or empty rollup means tests have not run yet; do NOT merge
 
 ```bash
 # Re-read check state immediately before merging
 CHECKS=$(gh pr view {number} --json statusCheckRollup --jq '.statusCheckRollup')
-FAILURES=$(echo "$CHECKS" | jq '[.[] | select(.conclusion != null and .conclusion != "SUCCESS")] | length')
-PENDING=$(echo "$CHECKS"  | jq '[.[] | select(.conclusion == null or .conclusion == "")] | length')
 
-if [ "$FAILURES" -gt 0 ] || [ "$PENDING" -gt 0 ]; then
-  echo "PR #{number}: not ready to merge (failures=$FAILURES pending=$PENDING)"
+# Require e2e-api-check to be explicitly SUCCESS — empty rollup = not tested = do not merge
+E2E=$(echo "$CHECKS" | jq -r '[.[] | select(.context == "e2e-api-check")] | .[0].conclusion // "missing"')
+
+if [ "$E2E" != "SUCCESS" ]; then
+  echo "PR #{number}: waiting for e2e-api-check (currently: $E2E)"
 else
-  echo "PR #{number}: merging"
+  echo "PR #{number}: e2e-api-check passed — merging"
   gh pr merge {number} --squash --delete-branch
 fi
 ```

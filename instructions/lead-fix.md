@@ -134,7 +134,7 @@ git push origin "$BRANCH"
 
 ---
 
-## Step 8: Post comment and remove label
+## Step 8: Post comment, remove label, and enable auto-merge
 
 ```bash
 gh pr comment {number} --body "$(cat <<'EOF'
@@ -144,7 +144,7 @@ gh pr comment {number} --body "$(cat <<'EOF'
 
 **Change:** {what was changed and why}
 
-Tests will re-run automatically.
+Tests will re-run automatically. Once tests pass and review approves, this PR will auto-merge.
 
 ---
 *Fix by Lead on {date}*
@@ -152,6 +152,9 @@ EOF
 )"
 
 gh pr edit {number} --remove-label "status:fix-needed"
+
+# Enable auto-merge so the PR merges as soon as tests pass and review approves
+gh pr merge {number} --auto --squash || true
 ```
 
 ---
