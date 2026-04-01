@@ -93,3 +93,33 @@ jobs:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
           KAPA_PROJECT_ID: ${{ vars.KAPA_PROJECT_ID }}
           DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+
+      - name: Trigger tests after fix
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Always re-run tests after a fix — the fix pushed new code that must be verified.
+          PR_NUM="${{ github.event.pull_request.number || inputs.pr_number }}"
+          if [ -n "$PR_NUM" ]; then
+            # Label-triggered or explicit dispatch: test the specific PR just fixed
+            BRANCH=$(gh pr view "$PR_NUM" --repo ${{ github.repository }} \
+              --json headRefName --jq '.headRefName' 2>/dev/null)
+            if [ -n "$BRANCH" ]; then
+              gh workflow run test-examples.yml \
+                --repo ${{ github.repository }} \
+                --ref "$BRANCH" -f ref="$BRANCH" || true
+              echo "Dispatched tests for $BRANCH (PR #$PR_NUM)"
+            fi
+          else
+            # Sweep mode: dispatch for all open fix/* branches
+            gh pr list --repo ${{ github.repository }} --state open \
+              --json headRefName \
+              --jq '.[] | select(.headRefName | test("^fix/")) | .headRefName' \
+            | while read BRANCH; do
+                gh workflow run test-examples.yml \
+                  --repo ${{ github.repository }} \
+                  --ref "$BRANCH" -f ref="$BRANCH" || true
+                echo "Dispatched: $BRANCH"
+              done
+          fi

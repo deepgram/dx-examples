@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
   statuses: write
@@ -68,3 +68,40 @@ jobs:
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
           KAPA_PROJECT_ID: ${{ vars.KAPA_PROJECT_ID }}
+
+      - name: Sync approved PRs with main and trigger tests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Every approved PR needs tests to run on its current state before merging.
+          # Merge main into the branch to bring in the push-trigger workflow, which
+          # fires test-examples.yml on push. If already up-to-date, dispatch directly.
+          git config user.name "examples-bot"
+          git config user.email "noreply@deepgram.com"
+          git fetch origin main
+
+          gh pr list --repo ${{ github.repository }} --state open \
+            --label "status:review-passed" \
+            --json headRefName \
+            --jq '.[].headRefName' \
+          | while read BRANCH; do
+              git fetch origin "$BRANCH" 2>/dev/null || { echo "Branch $BRANCH gone"; continue; }
+              git checkout -B "$BRANCH" "origin/$BRANCH"
+              MERGE_OUT=$(git merge origin/main --no-edit --no-ff 2>&1) || {
+                echo "⚠ Merge conflict on $BRANCH — dispatching tests without merge"
+                git merge --abort 2>/dev/null || true
+                gh workflow run test-examples.yml \
+                  --repo ${{ github.repository }} \
+                  --ref "$BRANCH" -f ref="$BRANCH" || true
+                continue
+              }
+              if echo "$MERGE_OUT" | grep -q "Already up to date"; then
+                echo "$BRANCH already up-to-date — dispatching tests"
+                gh workflow run test-examples.yml \
+                  --repo ${{ github.repository }} \
+                  --ref "$BRANCH" -f ref="$BRANCH" || true
+              else
+                git push origin "$BRANCH"
+                echo "✓ Merged main into $BRANCH (push trigger fires tests)"
+              fi
+            done

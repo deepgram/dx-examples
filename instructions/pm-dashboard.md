@@ -12,56 +12,68 @@ examples table with live status, and open a PR if anything changed.
 
 All runtimes (Node.js, Python, Go) and all secrets are available in the environment.
 
-```bash
-declare -A STATUS
+Results are written to `/tmp/status_<example>` immediately after each test so that
+status survives across separate tool invocations (bash variables do not).
 
+```bash
 for dir in examples/*/; do
   [ ! -d "$dir" ] || [ -f "${dir}.gitkeep" ] && continue
   EXAMPLE=$(basename "$dir")
+  RESULT_FILE="/tmp/status_${EXAMPLE}"
 
   LANG=""
-  [ -f "${dir}package.json" ]    && LANG="node"
+  [ -f "${dir}package.json" ]     && LANG="node"
   [ -f "${dir}requirements.txt" ] && LANG="python"
-  [ -f "${dir}pyproject.toml" ]  && LANG="python"
-  [ -f "${dir}go.mod" ]          && LANG="go"
-  [ -z "$LANG" ] && STATUS[$EXAMPLE]="no-tests" && continue
+  [ -f "${dir}pyproject.toml" ]   && LANG="python"
+  [ -f "${dir}go.mod" ]           && LANG="go"
+  if [ -z "$LANG" ]; then echo "no-tests" > "$RESULT_FILE"; continue; fi
 
-  pushd "$dir" > /dev/null
-
-  # Credential check
+  # Credential check — read from the dir, not cwd
   MISSING=""
-  if [ -f ".env.example" ]; then
+  if [ -f "${dir}.env.example" ]; then
     while IFS= read -r line; do
       [[ -z "${line// }" || "$line" == \#* ]] && continue
       VAR="${line%%=*}"; VAR="${VAR// /}"
       [ -z "$VAR" ] && continue
       [ -z "${!VAR+x}" ] || [ -z "${!VAR}" ] && MISSING="$MISSING $VAR"
-    done < ".env.example"
+    done < "${dir}.env.example"
   fi
+  if [ -n "$MISSING" ]; then echo "needs-credentials" > "$RESULT_FILE"; continue; fi
 
-  if [ -n "$MISSING" ]; then
-    STATUS[$EXAMPLE]="needs-credentials"
-    popd > /dev/null; continue
-  fi
-
-  PASS=false
+  # Run test in a subshell (isolates cd + pip state), write result to file atomically
   if [ "$LANG" = "node" ]; then
-    npm install --prefer-offline -q 2>/dev/null
-    npm test > /tmp/test_out_${EXAMPLE}.txt 2>&1 && PASS=true
-  elif [ "$LANG" = "python" ]; then
-    pip install -q -r requirements.txt 2>/dev/null || pip install -q -e . 2>/dev/null
-    if find tests/ -name "test_*.py" 2>/dev/null | grep -q .; then
-      python -m pytest tests/ -q > /tmp/test_out_${EXAMPLE}.txt 2>&1 && PASS=true
-    elif ls tests/*.py 2>/dev/null | grep -q .; then
-      python "$(ls tests/*.py | head -1)" > /tmp/test_out_${EXAMPLE}.txt 2>&1 && PASS=true
-    fi
-  elif [ "$LANG" = "go" ]; then
-    go mod download 2>/dev/null
-    go test ./... > /tmp/test_out_${EXAMPLE}.txt 2>&1 && PASS=true
-  fi
+    ( cd "$dir" && npm install --prefer-offline -q 2>/dev/null && \
+      npm test > /tmp/test_out_${EXAMPLE}.txt 2>&1 ) \
+      && echo "passing" > "$RESULT_FILE" || echo "failing" > "$RESULT_FILE"
 
-  [ "$PASS" = "true" ] && STATUS[$EXAMPLE]="passing" || STATUS[$EXAMPLE]="failing"
-  popd > /dev/null
+  elif [ "$LANG" = "python" ]; then
+    (
+      cd "$dir"
+      pip install -q -r requirements.txt 2>/dev/null || pip install -q -e . 2>/dev/null
+      pip install -q pytest 2>/dev/null
+      if find tests/ -name "test_*.py" 2>/dev/null | grep -q .; then
+        python -m pytest tests/ -q > /tmp/test_out_${EXAMPLE}.txt 2>&1
+      elif ls tests/*.py 2>/dev/null | head -1 | grep -q .; then
+        python "$(ls tests/*.py | head -1)" > /tmp/test_out_${EXAMPLE}.txt 2>&1
+      fi
+    ) && echo "passing" > "$RESULT_FILE" || echo "failing" > "$RESULT_FILE"
+
+  elif [ "$LANG" = "go" ]; then
+    ( cd "$dir" && go mod download 2>/dev/null && \
+      go test ./... > /tmp/test_out_${EXAMPLE}.txt 2>&1 ) \
+      && echo "passing" > "$RESULT_FILE" || echo "failing" > "$RESULT_FILE"
+  fi
+done
+```
+
+After running all tests, read the results:
+
+```bash
+declare -A STATUS
+for dir in examples/*/; do
+  [ ! -d "$dir" ] || [ -f "${dir}.gitkeep" ] && continue
+  EXAMPLE=$(basename "$dir")
+  STATUS[$EXAMPLE]=$(cat "/tmp/status_${EXAMPLE}" 2>/dev/null || echo "no-tests")
 done
 ```
 
