@@ -5,6 +5,7 @@ require('dotenv').config();
 const express = require('express');
 const expressWs = require('express-ws');
 const { DeepgramClient } = require('@deepgram/sdk');
+const twilio = require('twilio');
 
 const PORT = process.env.PORT || 3000;
 
@@ -35,15 +36,11 @@ function createApp() {
     const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'wss' : 'ws';
     const streamUrl = `${protocol}://${host}/media`;
 
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>This call is being transcribed by Deepgram.</Say>
-  <Connect>
-    <Stream url="${streamUrl}" />
-  </Connect>
-</Response>`;
+    const response = new twilio.twiml.VoiceResponse();
+    response.say('This call is being transcribed by Deepgram.');
+    response.connect().stream({ url: streamUrl });
 
-    res.type('text/xml').send(twiml);
+    res.type('text/xml').send(response.toString());
     console.log(`[voice] New call → streaming to ${streamUrl}`);
   });
 
