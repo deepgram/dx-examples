@@ -18,11 +18,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   issues: write
-  statuses: write
-  actions: write
 
 jobs:
   review:
@@ -38,7 +36,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || '' }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
 
       - name: Configure git
         run: |
@@ -57,7 +66,7 @@ jobs:
           mode: agent
           model: claude-opus-4-6
           allowed_tools: "Bash,Read,Glob,Grep"
-          timeout_minutes: 20
+          timeout_minutes: 30
           direct_prompt: |
             Read and execute instructions/lead-review.md.
 
@@ -69,42 +78,20 @@ jobs:
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
           KAPA_PROJECT_ID: ${{ vars.KAPA_PROJECT_ID }}
-
-      - name: Sync approved PRs with main and trigger tests
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Every approved PR needs tests to run on its current state before merging.
-          # Merge main into the branch to bring in the push-trigger workflow, which
-          # fires test-examples.yml on push. If already up-to-date, dispatch directly.
-          git config user.name "examples-bot"
-          git config user.email "noreply@deepgram.com"
-          git fetch origin main
-
-          gh pr list --repo ${{ github.repository }} --state open \
-            --label "status:review-passed" \
-            --json headRefName \
-            --jq '.[].headRefName' \
-          | while read BRANCH; do
-              git fetch origin "$BRANCH" 2>/dev/null || { echo "Branch $BRANCH gone"; continue; }
-              git checkout -B "$BRANCH" "origin/$BRANCH"
-              MERGE_OUT=$(git merge origin/main --no-edit --no-ff 2>&1) || {
-                echo "⚠ Merge conflict on $BRANCH — dispatching tests without merge"
-                git merge --abort 2>/dev/null || true
-                gh workflow run test-examples.yml \
-                  --repo ${{ github.repository }} \
-                  --ref "$BRANCH" -f ref="$BRANCH" || true
-                continue
-              }
-              if echo "$MERGE_OUT" | grep -q "Already up to date"; then
-                echo "$BRANCH already up-to-date with main"
-              else
-                git push origin "$BRANCH"
-                echo "✓ Merged main into $BRANCH"
-              fi
-              # Always dispatch explicitly — GITHUB_TOKEN pushes don't trigger workflows
-              gh workflow run test-examples.yml \
-                --repo ${{ github.repository }} \
-                --ref "$BRANCH" -f ref="$BRANCH" || true
-              echo "Dispatched tests for $BRANCH"
-            done
+          DEEPGRAM_API_KEY:      ${{ secrets.DEEPGRAM_API_KEY }}
+          TWILIO_ACCOUNT_SID:    ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:     ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_PHONE_NUMBER:   ${{ secrets.TWILIO_PHONE_NUMBER }}
+          LIVEKIT_URL:           ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY:       ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET:    ${{ secrets.LIVEKIT_API_SECRET }}
+          OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
+          DISCORD_BOT_TOKEN:     ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_ID:     ${{ secrets.DISCORD_CLIENT_ID }}
+          VONAGE_APPLICATION_ID: ${{ secrets.VONAGE_APPLICATION_ID }}
+          VONAGE_PRIVATE_KEY:    ${{ secrets.VONAGE_PRIVATE_KEY }}
+          DAILY_API_KEY:         ${{ secrets.DAILY_API_KEY }}
+          PIPECAT_API_KEY:       ${{ secrets.PIPECAT_API_KEY }}
+          SLACK_BOT_TOKEN:       ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_TOKEN:       ${{ secrets.SLACK_APP_TOKEN }}
+          TELEGRAM_BOT_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}

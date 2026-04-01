@@ -68,25 +68,3 @@ jobs:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
           KAPA_PROJECT_ID: ${{ vars.KAPA_PROJECT_ID }}
 
-      - name: Trigger tests on untested example PRs
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Dispatch test-examples for any open example/* or fix/* PR that has no test runs yet.
-          # GITHUB_TOKEN-created PRs don't fire pull_request events, so we dispatch explicitly.
-          gh pr list --repo ${{ github.repository }} --state open \
-            --json headRefName \
-            --jq '.[] | select(.headRefName | test("^(example|fix)/")) | .headRefName' \
-          | while read BRANCH; do
-              COUNT=$(gh run list --repo ${{ github.repository }} \
-                --workflow=test-examples.yml --branch "$BRANCH" \
-                --json databaseId --jq 'length' 2>/dev/null || echo "0")
-              if [ "$COUNT" = "0" ]; then
-                gh workflow run test-examples.yml \
-                  --repo ${{ github.repository }} \
-                  --ref "$BRANCH" \
-                  -f ref="$BRANCH" || true
-                echo "Dispatched tests for $BRANCH"
-              fi
-            done

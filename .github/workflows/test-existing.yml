@@ -393,7 +393,7 @@ jobs:
                - Branch: fix/${{ steps.collect.outputs.slug }}-regression-${{ steps.date.outputs.date }}
                - Label: type:fix
                - Title: [Fix] {NNN}-${{ steps.collect.outputs.slug }} — {brief description}
-               - Enable auto-merge: gh pr merge {number} --auto --squash
+               - Do NOT enable auto-merge — PRs wait for human review and merge
 
             Today's date: ${{ steps.date.outputs.date }}
             Repository: ${{ github.repository }}

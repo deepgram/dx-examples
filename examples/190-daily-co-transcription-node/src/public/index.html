@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily.co + Deepgram Live Transcription</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; display: flex; flex-direction: column; }
+    header { padding: 1rem 1.5rem; background: #111; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.1rem; font-weight: 600; }
+    .badge { background: #1a73e8; color: #fff; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .controls { display: flex; gap: 0.5rem; margin-left: auto; }
+    button { padding: 0.5rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: background 0.15s; }
+    #btn-start { background: #1db954; color: #fff; }
+    #btn-start:hover { background: #1ed760; }
+    #btn-start:disabled { background: #333; color: #666; cursor: default; }
+    #btn-stop { background: #e53935; color: #fff; }
+    #btn-stop:hover { background: #ef5350; }
+    #btn-stop:disabled { background: #333; color: #666; cursor: default; }
+    .status { font-size: 0.8rem; color: #888; padding: 0.3rem 0.8rem; }
+    .main { display: flex; flex: 1; overflow: hidden; }
+    .video-area { flex: 2; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+    #daily-container { width: 100%; height: 100%; }
+    #daily-container iframe { width: 100%; height: 100%; border: none; }
+    .caption-overlay { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); max-width: 80%; background: rgba(0,0,0,0.75); padding: 0.6rem 1rem; border-radius: 8px; font-size: 1rem; line-height: 1.5; text-align: center; pointer-events: none; min-height: 2rem; }
+    .caption-overlay .interim { color: #aaa; }
+    .caption-overlay .final { color: #fff; }
+    .caption-overlay .speaker { color: #1db954; font-weight: 600; margin-right: 0.3rem; }
+    .transcript-panel { flex: 1; min-width: 280px; max-width: 360px; background: #111; border-left: 1px solid #222; display: flex; flex-direction: column; }
+    .transcript-panel h2 { padding: 0.8rem 1rem; font-size: 0.9rem; border-bottom: 1px solid #222; }
+    #transcript-log { flex: 1; overflow-y: auto; padding: 0.8rem 1rem; font-size: 0.85rem; line-height: 1.6; }
+    #transcript-log .entry { margin-bottom: 0.4rem; }
+    #transcript-log .entry .spk { color: #1db954; font-weight: 600; }
+    .placeholder { color: #555; text-align: center; padding: 3rem 1rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Daily.co + Deepgram</h1>
+    <span class="badge">Live STT</span>
+    <span id="status" class="status">Ready</span>
+    <div class="controls">
+      <button id="btn-start">Start Call</button>
+      <button id="btn-stop" disabled>Leave</button>
+    </div>
+  </header>
+  <div class="main">
+    <div class="video-area">
+      <div id="daily-container">
+        <div class="placeholder" id="video-placeholder">Click "Start Call" to create a room and begin transcription</div>
+      </div>
+      <div class="caption-overlay" id="captions"></div>
+    </div>
+    <div class="transcript-panel">
+      <h2>Transcript</h2>
+      <div id="transcript-log"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/@daily-co/daily-js"></script>
+  <script>
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const statusEl = document.getElementById('status');
+    const captionsEl = document.getElementById('captions');
+    const logEl = document.getElementById('transcript-log');
+    const container = document.getElementById('daily-container');
+    const placeholder = document.getElementById('video-placeholder');
+
+    let callFrame = null;
+    let ws = null;
+    let audioContext = null;
+    let processor = null;
+    let mediaStream = null;
+
+    function setStatus(text) { statusEl.textContent = text; }
+
+    function addLogEntry(text, speaker) {
+      const div = document.createElement('div');
+      div.className = 'entry';
+      if (speaker !== null && speaker !== undefined) {
+        div.innerHTML = `<span class="spk">Speaker ${speaker}:</span> ${text}`;
+      } else {
+        div.textContent = text;
+      }
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateCaption(text, isFinal, speaker) {
+      const spk = (speaker !== null && speaker !== undefined) ? `<span class="speaker">S${speaker}</span>` : '';
+      const cls = isFinal ? 'final' : 'interim';
+      captionsEl.innerHTML = `${spk}<span class="${cls}">${text}</span>`;
+    }
+
+    function connectTranscription() {
+      const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${protocol}://${location.host}/transcribe`);
+
+      ws.onopen = () => setStatus('Transcribing...');
+      ws.onclose = () => setStatus('Transcription stopped');
+      ws.onerror = () => setStatus('WebSocket error');
+
+      ws.onmessage = (evt) => {
+        const data = JSON.parse(evt.data);
+        updateCaption(data.transcript, data.is_final, data.speaker);
+        if (data.is_final) {
+          addLogEntry(data.transcript, data.speaker);
+        }
+      };
+    }
+
+    // Capture microphone audio and send linear16 PCM to the server WebSocket
+    async function startAudioCapture() {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true } });
+      audioContext = new AudioContext({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(mediaStream);
+
+      // ScriptProcessorNode converts float32 → int16 PCM
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const float32 = e.inputBuffer.getChannelData(0);
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          const s = Math.max(-1, Math.min(1, float32[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        ws.send(int16.buffer);
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+    }
+
+    function stopAudioCapture() {
+      if (processor) { processor.disconnect(); processor = null; }
+      if (audioContext) { audioContext.close(); audioContext = null; }
+      if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    }
+
+    btnStart.addEventListener('click', async () => {
+      btnStart.disabled = true;
+      setStatus('Creating room...');
+
+      try {
+        const res = await fetch('/api/room', { method: 'POST' });
+        if (!res.ok) throw new Error('Failed to create room');
+        const room = await res.json();
+
+        setStatus('Joining room...');
+        placeholder.style.display = 'none';
+
+        callFrame = window.DailyIframe.createFrame(container, {
+          iframeStyle: { width: '100%', height: '100%', border: 'none' },
+          showLeaveButton: false,
+          showFullscreenButton: true,
+        });
+
+        await callFrame.join({ url: room.url });
+        setStatus('In call — starting transcription...');
+
+        connectTranscription();
+        await startAudioCapture();
+
+        btnStop.disabled = false;
+      } catch (err) {
+        setStatus('Error: ' + err.message);
+        btnStart.disabled = false;
+      }
+    });
+
+    btnStop.addEventListener('click', async () => {
+      btnStop.disabled = true;
+      setStatus('Leaving...');
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'stop' }));
+        ws.close();
+        ws = null;
+      }
+
+      stopAudioCapture();
+
+      if (callFrame) {
+        await callFrame.leave();
+        callFrame.destroy();
+        callFrame = null;
+      }
+
+      placeholder.style.display = '';
+      captionsEl.innerHTML = '';
+      setStatus('Ready');
+      btnStart.disabled = false;
+    });
+  </script>
+</body>
+</html>

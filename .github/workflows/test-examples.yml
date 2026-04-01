@@ -19,13 +19,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'examples/**'
-  push:
-    branches:
-      - 'example/**'
-      - 'fix/**'
-    paths:
-      - 'examples/**'
-  workflow_dispatch:
+workflow_dispatch:
     inputs:
       ref:
         description: 'Branch or SHA to test (default: main)'
@@ -37,7 +31,7 @@ on:
         default: ''
 
 concurrency:
-  group: test-examples-${{ github.event.pull_request.head.ref || github.ref_name || inputs.ref }}-${{ inputs.example || 'all' }}
+  group: test-examples-${{ github.event.pull_request.number || inputs.ref || github.ref }}-${{ inputs.example || 'all' }}
   cancel-in-progress: true
 
 permissions:
@@ -567,7 +561,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
-        id: evaluate
         run: |
           NODE="${{ needs.test-node.result }}"
           PYTHON="${{ needs.test-python.result }}"
@@ -600,30 +593,4 @@ jobs:
             exit 1
           else
             echo "✅ All applicable tests passed (skipped = no examples of that language)"
-            echo "outcome=success" >> $GITHUB_OUTPUT
           fi
-
-      # Post a commit status so branch protection is satisfied for workflow_dispatch runs.
-      # GitHub branch protection treats commit statuses (Statuses API) and check runs
-      # (Checks API) equivalently for required-status-check enforcement.
-      - name: Post commit status for branch protection
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-          OUTCOME="${{ steps.evaluate.outputs.outcome || 'success' }}"
-          STATE="success"
-          [ "${{ job.status }}" = "failure" ] && STATE="failure"
-          [ "${{ job.status }}" = "cancelled" ] && STATE="error"
-          DESC="All applicable tests passed"
-          [ "$STATE" != "success" ] && DESC="One or more test jobs failed"
-
-          gh api "repos/${{ github.repository }}/statuses/$SHA" \
-            --method POST \
-            -f state="$STATE" \
-            -f context="e2e-api-check" \
-            -f description="$DESC" \
-            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --silent
-          echo "Posted commit status: $STATE on $SHA"
