@@ -194,7 +194,7 @@ if [ "$E2E" != "success" ]; then
   echo "PR #{number}: waiting for e2e-api-check (currently: $E2E)"
 else
   echo "PR #{number}: e2e-api-check passed — merging"
-  gh pr merge {number} --squash --delete-branch
+  gh pr merge {number} --auto --squash
 fi
 ```
 
