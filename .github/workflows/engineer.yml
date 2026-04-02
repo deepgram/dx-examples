@@ -65,6 +65,20 @@ jobs:
         id: date
         run: echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
+      - name: Fetch latest Deepgram SDK versions
+        id: sdk
+        run: |
+          latest() { curl -sf "https://api.github.com/repos/deepgram/$1/releases/latest" | jq -r '.tag_name // "unknown"'; }
+          echo "python=$(latest deepgram-python-sdk)"   >> $GITHUB_OUTPUT
+          echo "js=$(latest deepgram-js-sdk)"           >> $GITHUB_OUTPUT
+          echo "go=$(latest deepgram-go-sdk)"           >> $GITHUB_OUTPUT
+          echo "java=$(latest deepgram-java-sdk)"       >> $GITHUB_OUTPUT
+          echo "rust=$(latest deepgram-rust-sdk)"       >> $GITHUB_OUTPUT
+          echo "dotnet=$(latest deepgram-dotnet-sdk)"   >> $GITHUB_OUTPUT
+          echo "cli=$(latest cli)"                      >> $GITHUB_OUTPUT
+          # Log for visibility
+          cat $GITHUB_OUTPUT | grep -E "^(python|js|go|java|rust|dotnet|cli)="
+
       - name: Check back pressure
         id: backpressure
         if: steps.auth.outputs.allowed != 'false'
@@ -104,6 +118,17 @@ jobs:
             - Trigger: ${{ github.event_name }}
             - Issue number (if triggered by issue): ${{ github.event.issue.number }}
             - Manual issue override: ${{ inputs.issue_number }}
+
+            REQUIRED — use EXACTLY these Deepgram SDK versions, no older:
+            - Python:     deepgram-sdk==${{ steps.sdk.outputs.python }}  (requirements.txt)
+            - JavaScript: @deepgram/sdk@${{ steps.sdk.outputs.js }}      (package.json)
+            - Go:         ${{ steps.sdk.outputs.go }}                    (go.mod)
+            - Java:       ${{ steps.sdk.outputs.java }}                  (pom.xml/build.gradle)
+            - Rust:       ${{ steps.sdk.outputs.rust }}                  (Cargo.toml)
+            - .NET:       ${{ steps.sdk.outputs.dotnet }}                (*.csproj)
+            - CLI:        ${{ steps.sdk.outputs.cli }}
+
+            Pin Python with == not >=. Pin JS with the exact version (no ^ or ~).
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
           KAPA_PROJECT_ID: ${{ vars.KAPA_PROJECT_ID }}

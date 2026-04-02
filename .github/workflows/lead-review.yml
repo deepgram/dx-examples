@@ -78,6 +78,19 @@ jobs:
         id: date
         run: echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
+      - name: Fetch latest Deepgram SDK versions
+        id: sdk
+        run: |
+          latest() { curl -sf "https://api.github.com/repos/deepgram/$1/releases/latest" | jq -r '.tag_name // "unknown"'; }
+          echo "python=$(latest deepgram-python-sdk)"   >> $GITHUB_OUTPUT
+          echo "js=$(latest deepgram-js-sdk)"           >> $GITHUB_OUTPUT
+          echo "go=$(latest deepgram-go-sdk)"           >> $GITHUB_OUTPUT
+          echo "java=$(latest deepgram-java-sdk)"       >> $GITHUB_OUTPUT
+          echo "rust=$(latest deepgram-rust-sdk)"       >> $GITHUB_OUTPUT
+          echo "dotnet=$(latest deepgram-dotnet-sdk)"   >> $GITHUB_OUTPUT
+          echo "cli=$(latest cli)"                      >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT | grep -E "^(python|js|go|java|rust|dotnet|cli)="
+
       - name: Run instruction
         if: steps.auth.outputs.allowed != 'false'
         uses: anthropics/claude-code-action@beta
@@ -96,6 +109,15 @@ jobs:
             - Today's date: ${{ steps.date.outputs.date }}
             - Repository: ${{ github.repository }}
             - Trigger: ${{ github.event_name }}
+
+            REQUIRED SDK versions — flag any PR that uses an older version:
+            - Python:     deepgram-sdk==${{ steps.sdk.outputs.python }}
+            - JavaScript: @deepgram/sdk@${{ steps.sdk.outputs.js }}
+            - Go:         ${{ steps.sdk.outputs.go }}
+            - Java:       ${{ steps.sdk.outputs.java }}
+            - Rust:       ${{ steps.sdk.outputs.rust }}
+            - .NET:       ${{ steps.sdk.outputs.dotnet }}
+            - CLI:        ${{ steps.sdk.outputs.cli }}
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
           KAPA_PROJECT_ID: ${{ vars.KAPA_PROJECT_ID }}
