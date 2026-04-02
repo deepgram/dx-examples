@@ -15,12 +15,21 @@ Usage:
 import os
 import sys
 import tempfile
-import urllib.request
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+if not os.environ.get("DEEPGRAM_API_KEY"):
+    print("Error: DEEPGRAM_API_KEY is not set.", file=sys.stderr)
+    print("Get a free key at https://console.deepgram.com/", file=sys.stderr)
+    sys.exit(1)
+
+if not os.environ.get("OPENAI_API_KEY"):
+    print("Error: OPENAI_API_KEY is not set.", file=sys.stderr)
+    print("Get a key at https://platform.openai.com/api-keys", file=sys.stderr)
+    sys.exit(1)
 
 from crewai import Agent, Crew, Process, Task
 from crewai.tools import tool
@@ -82,16 +91,20 @@ def speak_text(text: str) -> str:
     # aura-2-asteria-en is a natural conversational voice.
     # Other options: aura-2-zeus-en, aura-2-orpheus-en, aura-2-luna-en
     # Full list: https://developers.deepgram.com/docs/tts-models
-    response = client.speak.v1.media.save(
-        text,
+    output_path = os.path.join(tempfile.gettempdir(), "crewai_voice_output.wav")
+    audio_iter = client.speak.v1.audio.generate(
+        text=text,
         model="aura-2-asteria-en",
         encoding="linear16",
         sample_rate=24000,
+        container="wav",
         tag="deepgram-examples",
-        filename=os.path.join(tempfile.gettempdir(), "crewai_voice_output.wav"),
     )
 
-    output_path = response.filename
+    with open(output_path, "wb") as f:
+        for chunk in audio_iter:
+            f.write(chunk)
+
     return f"Audio response saved to: {output_path}"
 
 
@@ -197,16 +210,6 @@ def build_crew(audio_source: str) -> Crew:
 
 
 def main():
-    if not os.environ.get("DEEPGRAM_API_KEY"):
-        print("Error: DEEPGRAM_API_KEY is not set.", file=sys.stderr)
-        print("Get a free key at https://console.deepgram.com/", file=sys.stderr)
-        sys.exit(1)
-
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY is not set.", file=sys.stderr)
-        print("Get a key at https://platform.openai.com/api-keys", file=sys.stderr)
-        sys.exit(1)
-
     audio_source = sys.argv[1] if len(sys.argv) > 1 else AUDIO_URL
 
     print(f"Audio source: {audio_source}")
