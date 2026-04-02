@@ -204,7 +204,7 @@ FIX_ATTEMPTS=$(git log origin/{branch} --oneline --author="examples-bot" 2>/dev/
 
 If exhausted and not already escalated, escalate:
 ```bash
-gh pr comment {number} --body "@devrel — VP escalation: this PR has been stuck for >4 hours after {FIX_ATTEMPTS} fix attempts. Root cause unclear. Manual review needed.
+gh pr comment {number} --body "@deepgram/devrel — VP escalation: this PR has been stuck for >4 hours after {FIX_ATTEMPTS} fix attempts. Root cause unclear. Manual review needed.
 
 State: {summary of current labels and check status}
 

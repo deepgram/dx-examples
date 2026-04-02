@@ -80,7 +80,7 @@ jobs:
             [ "$FIXES" -ge 3 ] && echo "max_reached=true" >> $GITHUB_OUTPUT \
                                || echo "max_reached=false" >> $GITHUB_OUTPUT
             [ "$FIXES" -ge 3 ] && gh pr comment "$PR_NUM" \
-              --body "@devrel — fix agent made 3 attempts, still failing. Manual intervention needed."
+              --body "@deepgram/devrel — fix agent made 3 attempts, still failing. Manual intervention needed."
           else
             echo "max_reached=false" >> $GITHUB_OUTPUT
           fi

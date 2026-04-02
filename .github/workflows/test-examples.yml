@@ -202,7 +202,7 @@ jobs:
             const existing = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
             if (existing.data.some(c => c.body.includes('Missing credentials'))) return;
             await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number,
-              body: `⏳ **Missing credentials** — these Node.js examples need secrets:\n\n${missing.map(d => `- \`${d}\``).join('\n')}\n\n@devrel please add the required secrets.` });
+              body: `⏳ **Missing credentials** — these Node.js examples need secrets:\n\n${missing.map(d => `- \`${d}\``).join('\n')}\n\n@deepgram/devrel please add the required secrets.` });
 
   # ── Python ───────────────────────────────────────────────────────────────────
   test-python:
@@ -283,7 +283,7 @@ jobs:
             const existing = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
             if (existing.data.some(c => c.body.includes('Missing credentials'))) return;
             await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number,
-              body: `⏳ **Missing credentials** — these Python examples need secrets:\n\n${missing.map(d => `- \`${d}\``).join('\n')}\n\n@devrel please add the required secrets.` });
+              body: `⏳ **Missing credentials** — these Python examples need secrets:\n\n${missing.map(d => `- \`${d}\``).join('\n')}\n\n@deepgram/devrel please add the required secrets.` });
 
   # ── Go ───────────────────────────────────────────────────────────────────────
   test-go:
