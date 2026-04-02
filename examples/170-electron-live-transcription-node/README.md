@@ -44,7 +44,7 @@ npm start
 2. When you click **Start**, the renderer requests microphone access via `getUserMedia` at 16 kHz
 3. A `ScriptProcessorNode` captures raw PCM audio and converts float32 samples to linear16
 4. Audio chunks are sent to the main process via IPC (`contextBridge` + `ipcRenderer`)
-5. The main process connects to Deepgram's live STT WebSocket using `client.listen.v1.live()` and forwards audio
+5. The main process connects to Deepgram's live STT WebSocket using `client.listen.v1.connect()` and forwards audio
 6. Transcript events (interim and final) stream back and are displayed in the overlay
 7. The overlay supports click-through (`setIgnoreMouseEvents`) so it never blocks interaction with other apps
 8. Use **Ctrl+Shift+T** (or **Cmd+Shift+T** on macOS) to toggle overlay visibility

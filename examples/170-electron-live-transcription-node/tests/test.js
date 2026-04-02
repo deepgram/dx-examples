@@ -81,7 +81,7 @@ async function testDeepgramLiveTranscription() {
   console.log(`Audio ready: ${pcm16.length} bytes of linear16 16 kHz`);
 
   // Connect to Deepgram live STT
-  const connection = client.listen.v1.live({
+  const connection = await client.listen.v1.connect({
     model: 'nova-3',
     encoding: 'linear16',
     sample_rate: 16000,
@@ -106,36 +106,13 @@ async function testDeepgramLiveTranscription() {
 
     connection.on('message', (data) => {
       try {
-        const msg = typeof data === 'string' ? JSON.parse(data) : data;
-        const transcript = msg?.channel?.alternatives?.[0]?.transcript;
+        const transcript = data?.channel?.alternatives?.[0]?.transcript;
         if (transcript) {
-          const tag = msg.is_final ? 'final' : 'interim';
+          const tag = data.is_final ? 'final' : 'interim';
           console.log(`[${tag}] ${transcript}`);
           transcripts.push(transcript);
         }
       } catch {}
-    });
-
-    connection.on('open', () => {
-      console.log('[deepgram] Connected — streaming audio...');
-
-      // Stream 5 seconds of audio in real-time-paced chunks
-      const CHUNK_BYTES = 640; // 20ms at 16kHz * 2 bytes
-      const MAX_BYTES = 16000 * 2 * 5; // 5 seconds
-      let pos = 0;
-
-      const sendChunk = () => {
-        if (pos >= pcm16.length || pos >= MAX_BYTES) {
-          console.log('[deepgram] Audio sent — waiting for final results...');
-          try { connection.finish(); } catch {}
-          return;
-        }
-        connection.send(pcm16.subarray(pos, pos + CHUNK_BYTES));
-        pos += CHUNK_BYTES;
-        setTimeout(sendChunk, 20);
-      };
-
-      sendChunk();
     });
 
     connection.on('close', () => {
@@ -161,6 +138,29 @@ async function testDeepgramLiveTranscription() {
         resolve(transcripts);
       }, 1000);
     });
+
+    connection.connect();
+    connection.waitForOpen().then(() => {
+      console.log('[deepgram] Connected — streaming audio...');
+
+      const CHUNK_BYTES = 640;
+      const MAX_BYTES = 16000 * 2 * 5;
+      let pos = 0;
+
+      const sendChunk = () => {
+        if (pos >= pcm16.length || pos >= MAX_BYTES) {
+          console.log('[deepgram] Audio sent — waiting for final results...');
+          try { connection.sendCloseStream({ type: 'CloseStream' }); } catch {}
+          try { connection.close(); } catch {}
+          return;
+        }
+        connection.sendBinary(pcm16.subarray(pos, pos + CHUNK_BYTES));
+        pos += CHUNK_BYTES;
+        setTimeout(sendChunk, 20);
+      };
+
+      sendChunk();
+    }).catch(reject);
   });
 }
 

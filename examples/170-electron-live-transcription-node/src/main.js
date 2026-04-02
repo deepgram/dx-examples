@@ -62,10 +62,10 @@ function createTray() {
 }
 
 // ── Deepgram live connection ────────────────────────────────────────────────
-function startDeepgramConnection() {
+async function startDeepgramConnection() {
   if (dgConnection) return;
 
-  dgConnection = deepgram.listen.v1.live({
+  dgConnection = await deepgram.listen.v1.connect({
     model: 'nova-3',
     encoding: 'linear16',
     sample_rate: 16000,
@@ -94,28 +94,31 @@ function startDeepgramConnection() {
 
   dgConnection.on('message', (data) => {
     try {
-      const msg = typeof data === 'string' ? JSON.parse(data) : data;
-      const transcript = msg?.channel?.alternatives?.[0]?.transcript;
+      const transcript = data?.channel?.alternatives?.[0]?.transcript;
       if (transcript && overlayWindow) {
         overlayWindow.webContents.send('transcript', {
           text: transcript,
-          is_final: msg.is_final,
+          is_final: data.is_final,
         });
       }
     } catch {}
   });
+
+  dgConnection.connect();
+  await dgConnection.waitForOpen();
 }
 
 function stopDeepgramConnection() {
   if (!dgConnection) return;
-  try { dgConnection.finish(); } catch {}
+  try { dgConnection.sendCloseStream({ type: 'CloseStream' }); } catch {}
+  try { dgConnection.close(); } catch {}
   dgConnection = null;
 }
 
 // ── IPC handlers ────────────────────────────────────────────────────────────
 ipcMain.on('audio-data', (_event, buffer) => {
   if (dgConnection) {
-    try { dgConnection.send(Buffer.from(buffer)); } catch {}
+    try { dgConnection.sendBinary(Buffer.from(buffer)); } catch {}
   }
 });
 
