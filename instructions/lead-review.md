@@ -142,6 +142,7 @@ Check:
 - [ ] Every Deepgram API call includes `tag: "deepgram-examples"` (JS) or `tag="deepgram-examples"` (Python)
 - [ ] No hardcoded credentials
 - [ ] Error handling covers main failure cases
+- [ ] Transcript assertions use length/duration proportionality — NOT specific word lists (transcription is non-deterministic; word lists cause flaky tests)
 - [ ] README: what you'll build, all env vars with where-to-get links, run instructions
 - [ ] `.env.example` present and complete
 - [ ] Credential check runs FIRST before any SDK imports that could throw

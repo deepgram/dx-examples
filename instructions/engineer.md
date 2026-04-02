@@ -185,6 +185,38 @@ if (missing.length > 0) {
 // ... real assertions using actual API calls ...
 ```
 
+**Asserting transcription results — never check for specific words:**
+
+Transcription is non-deterministic. Do NOT assert that the output contains
+specific words like `['spacewalk', 'astronaut']`. Instead, assert on structure
+and proportionality:
+
+```javascript
+// ✅ Good — proportional to audio sent
+const audioSentSecs = bytesSent / (sampleRate * 2); // 16-bit mono
+const minChars = Math.max(5, audioSentSecs * 2);    // ≥2 chars/sec
+assert(transcript.trim().length >= minChars,
+  `Transcript too short: ${transcript.length} chars for ${audioSentSecs}s`);
+
+// ✅ Good — structural checks
+assert(result.metadata.duration > 0, 'metadata.duration should be positive');
+assert(result.results.channels[0].alternatives[0].words.length > 0, 'should have words');
+const lastWord = words[words.length - 1];
+assert(lastWord.end <= audioSentSecs + 2, 'word timestamps should not exceed audio duration');
+
+// ❌ Bad — non-deterministic, will flake
+const found = ['spacewalk','astronaut','nasa'].filter(w => transcript.includes(w));
+assert(found.length > 0);
+```
+
+```python
+# Python equivalent
+audio_sent_secs = bytes_sent / (sample_rate * 2)
+min_chars = max(5, audio_sent_secs * 2)
+assert len(transcript.strip()) >= min_chars, f"Transcript too short for {audio_sent_secs}s of audio"
+assert response['metadata']['duration'] > 0
+```
+
 ```python
 # Python test template
 import os, sys
