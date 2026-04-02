@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deepgram NestJS Live Transcription</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    #status { padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; background: #f0f0f0; }
+    #status.connected { background: #d4edda; }
+    #status.error { background: #f8d7da; }
+    button { padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; border: none; border-radius: 4px; margin-right: 0.5rem; }
+    #startBtn { background: #0070f3; color: #fff; }
+    #stopBtn { background: #dc3545; color: #fff; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #transcripts { margin-top: 1rem; border: 1px solid #ddd; border-radius: 4px; padding: 1rem;
+      min-height: 200px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.5; }
+    .interim { color: #888; }
+    .final { color: #000; }
+  </style>
+</head>
+<body>
+  <h1>Deepgram NestJS Live Transcription</h1>
+  <div id="status">Disconnected</div>
+  <div>
+    <button id="startBtn">Start Microphone</button>
+    <button id="stopBtn" disabled>Stop</button>
+  </div>
+  <div id="transcripts"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const transcriptsEl = document.getElementById('transcripts');
+
+    let socket = null;
+    let mediaStream = null;
+    let audioContext = null;
+    let processor = null;
+
+    function setStatus(text, cls) {
+      statusEl.textContent = text;
+      statusEl.className = cls || '';
+    }
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        setStatus('Microphone access denied', 'error');
+        return;
+      }
+
+      socket = io();
+
+      socket.on('connect', () => setStatus('Connected — waiting for Deepgram…'));
+
+      socket.on('ready', () => {
+        setStatus('Listening…', 'connected');
+        startStreaming();
+      });
+
+      socket.on('transcript', (evt) => {
+        const span = document.createElement('span');
+        span.className = evt.isFinal ? 'final' : 'interim';
+        if (evt.isFinal) {
+          span.textContent = evt.transcript + '\n';
+        } else {
+          const existing = transcriptsEl.querySelector('.interim');
+          if (existing) existing.remove();
+          span.textContent = evt.transcript;
+        }
+        transcriptsEl.appendChild(span);
+        transcriptsEl.scrollTop = transcriptsEl.scrollHeight;
+      });
+
+      socket.on('error', (evt) => setStatus('Error: ' + evt.message, 'error'));
+      socket.on('disconnect', () => setStatus('Disconnected'));
+
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+    });
+
+    stopBtn.addEventListener('click', stop);
+
+    function startStreaming() {
+      // Capture mic audio as 16-bit PCM at 16 kHz to match Deepgram live options
+      audioContext = new AudioContext({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(mediaStream);
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        if (!socket?.connected) return;
+        const float32 = e.inputBuffer.getChannelData(0);
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          const s = Math.max(-1, Math.min(1, float32[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        socket.emit('audio', int16.buffer);
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+    }
+
+    function stop() {
+      if (processor) { processor.disconnect(); processor = null; }
+      if (audioContext) { audioContext.close(); audioContext = null; }
+      if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+      if (socket) { socket.disconnect(); socket = null; }
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      setStatus('Disconnected');
+    }
+  </script>
+</body>
+</html>
