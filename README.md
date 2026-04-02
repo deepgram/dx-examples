@@ -24,9 +24,15 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [130](examples/130-telegram-bot-python/) | Telegram Voice Transcription Bot | Python | Telegram | ✅ passing |
 | [140](examples/140-audio-to-subtitles-python/) | Audio to Subtitles CLI | Python | Deepgram SDK | ✅ passing |
 | [150](examples/150-flutter-voice-transcription-dart/) | Flutter Voice Transcription | Dart | Flutter | — |
+| [160](examples/160-llamaindex-audio-loader-python/) | LlamaIndex Audio Document Loader — Transcribe Audio into RAG Pipelines | Python | LlamaIndex | ✅ passing |
+| [170](examples/170-electron-live-transcription-node/) | Electron Live Transcription Overlay | Node.js | Electron | ❌ failing |
+| [180](examples/180-zoom-recording-transcription-node/) | Zoom Cloud Recording Transcription with Deepgram | Node.js | Zoom | ⏳ needs credentials |
+| [190](examples/190-daily-co-transcription-node/) | Daily.co Real-Time Transcription Overlay | Node.js | Daily.co | ❌ failing |
+| [200](examples/200-vanilla-js-browser-transcription/) | Vanilla JavaScript Browser Transcription (No Bundler) | Node.js | Deepgram SDK | ✅ passing |
+| [210](examples/210-openai-agents-voice-python/) | OpenAI Agents SDK Voice Pipeline with Deepgram STT & TTS | Python | OpenAI Agents SDK | ✅ passing |
 <!-- examples-table-end -->
 
-*Status last updated 2026-04-01.*
+*Status last updated 2026-04-02.*
 
 ## CI / testing
 
