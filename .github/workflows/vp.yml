@@ -2,7 +2,7 @@ name: VP — Unstick Pipeline
 
 # Supervisory role — runs periodically to find anything stuck in the pipeline
 # and get it moving. Re-triggers the appropriate agent workflow, or escalates
-# to @deepgram-devrel if it cannot resolve the blockage.
+# to @devrel if it cannot resolve the blockage.
 #
 # A "stuck" item is one where the responsible workflow missed its event trigger
 # (GITHUB_TOKEN limitation) or hit a silent failure.

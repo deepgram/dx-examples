@@ -213,6 +213,6 @@ If tests pass after the fix, also add the review-passed label so the PR advances
 - Apply minimum change — don't refactor or "improve" unrelated code
 - If the same fix has been tried before (check git log), escalate:
   ```bash
-  gh pr comment {number} --body "@deepgram-devrel — I've tried fixing this but the root cause is unclear. Logs: {findings}"
+  gh pr comment {number} --body "@devrel — I've tried fixing this but the root cause is unclear. Logs: {findings}"
   ```
 - Maximum 3 fix attempts per PR before escalating to human review
