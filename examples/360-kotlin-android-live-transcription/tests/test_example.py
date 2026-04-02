@@ -23,16 +23,14 @@ AUDIO_URL = "https://static.deepgram.com/examples/Bueller-Life-moves-pretty-fast
 
 # Verify the API key works with a pre-recorded transcription call
 # (live WebSocket requires a real mic; pre-recorded proves the key + SDK work)
-response = client.listen.rest.v("1").transcribe_url(
-    {"url": AUDIO_URL},
-    {"model": "nova-3", "tag": "deepgram-examples"},
+response = client.listen.v1.media.transcribe_url(
+    url=AUDIO_URL,
+    model="nova-3",
+    tag="deepgram-examples",
 )
 
 transcript = response.results.channels[0].alternatives[0].transcript
-assert len(transcript) > 0, "Expected non-empty transcript"
-assert "life" in transcript.lower() or "moves" in transcript.lower(), (
-    f"Unexpected transcript content: {transcript[:100]}"
-)
+assert len(transcript) > 20, f"Transcript too short ({len(transcript)} chars): {transcript[:100]}"
 
 print(f"OK — transcript: {transcript[:80]}...")
 

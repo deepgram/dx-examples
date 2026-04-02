@@ -37,7 +37,7 @@ echo "DEEPGRAM_API_KEY=your-key-here" >> local.properties
 
 ```bash
 # Clone and open in Android Studio
-cd examples/260-kotlin-android-live-transcription
+cd examples/360-kotlin-android-live-transcription
 # Set your API key
 export DEEPGRAM_API_KEY="your-key-here"
 # Build and install on connected device
