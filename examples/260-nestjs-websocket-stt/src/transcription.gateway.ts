@@ -78,10 +78,11 @@ export class TranscriptionGateway
     if (!session) return;
 
     session.ready = false;
+    this.sessions.delete(clientId);
     if (session.dgConnection) {
       try { session.dgConnection.sendCloseStream({ type: 'CloseStream' }); } catch {}
+      try { session.dgConnection.removeAllListeners(); } catch {}
       try { session.dgConnection.close(); } catch {}
     }
-    this.sessions.delete(clientId);
   }
 }
