@@ -115,5 +115,25 @@ jobs:
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
           KAPA_PROJECT_ID: ${{ vars.KAPA_PROJECT_ID }}
-          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          DEEPGRAM_API_KEY:      ${{ secrets.DEEPGRAM_API_KEY }}
+          TWILIO_ACCOUNT_SID:    ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:     ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_PHONE_NUMBER:   ${{ secrets.TWILIO_PHONE_NUMBER }}
+          LIVEKIT_URL:           ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY:       ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET:    ${{ secrets.LIVEKIT_API_SECRET }}
+          OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
+          DISCORD_BOT_TOKEN:     ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_ID:     ${{ secrets.DISCORD_CLIENT_ID }}
+          VONAGE_APPLICATION_ID: ${{ secrets.VONAGE_APPLICATION_ID }}
+          VONAGE_PRIVATE_KEY:    ${{ secrets.VONAGE_PRIVATE_KEY }}
+          DAILY_API_KEY:         ${{ secrets.DAILY_API_KEY }}
+          PIPECAT_API_KEY:       ${{ secrets.PIPECAT_API_KEY }}
+          SLACK_BOT_TOKEN:       ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_TOKEN:       ${{ secrets.SLACK_APP_TOKEN }}
+          TELEGRAM_BOT_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ZOOM_ACCOUNT_ID:       ${{ secrets.ZOOM_ACCOUNT_ID }}
+          ZOOM_CLIENT_ID:        ${{ secrets.ZOOM_CLIENT_ID }}
+          ZOOM_CLIENT_SECRET:    ${{ secrets.ZOOM_CLIENT_SECRET }}
+          ZOOM_WEBHOOK_SECRET_TOKEN: ${{ secrets.ZOOM_WEBHOOK_SECRET_TOKEN }}
 

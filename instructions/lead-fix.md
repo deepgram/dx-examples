@@ -108,18 +108,48 @@ Fix ONLY what is broken. Do not refactor unrelated code.
 
 ---
 
-## Step 6: Verify (if DEEPGRAM_API_KEY is available)
+## Step 6: Run tests after fixing
+
+After committing the fix, run the real test suite to confirm it passes.
+Capture the full output — it will go into the PR comment.
 
 ```bash
 cd examples/{slug}
-# Node.js
-node --check src/index.js && node --check tests/test.js && npm install && npm test
 
-# Python
-python -m py_compile src/*.py tests/*.py
+# Check credentials first
+MISSING=""
+if [ -f ".env.example" ]; then
+  while IFS= read -r line; do
+    [[ -z "${line// }" || "$line" == \#* ]] && continue
+    VAR="${line%%=*}"; VAR="${VAR// /}"
+    [ -z "$VAR" ] && continue
+    [ -z "${!VAR+x}" ] || [ -z "${!VAR}" ] && MISSING="$MISSING $VAR"
+  done < ".env.example"
+fi
 
-# Go
-go vet ./...
+TEST_OUTPUT=""
+TEST_PASSED=false
+
+if [ -n "$MISSING" ]; then
+  TEST_OUTPUT="⏳ Cannot verify — missing credentials: $MISSING"
+elif [ -f "package.json" ]; then
+  npm install --prefer-offline -q 2>/dev/null || npm install -q
+  TEST_OUTPUT=$(npm test 2>&1) && TEST_PASSED=true
+elif [ -f "requirements.txt" ]; then
+  pip install -q -r requirements.txt 2>/dev/null
+  pip install -q pytest 2>/dev/null
+  if find tests/ -name "test_*.py" 2>/dev/null | grep -q .; then
+    TEST_OUTPUT=$(python -m pytest tests/ -v 2>&1) && TEST_PASSED=true
+  else
+    TEST_OUTPUT=$(python "$(ls tests/*.py | head -1)" 2>&1) && TEST_PASSED=true
+  fi
+elif [ -f "go.mod" ]; then
+  go mod download 2>/dev/null
+  TEST_OUTPUT=$(go test ./... -v 2>&1) && TEST_PASSED=true
+fi
+
+# Do NOT print credential values in test output
+echo "$TEST_OUTPUT" | grep -v "API_KEY\|TOKEN\|SECRET\|PASSWORD"
 ```
 
 ---
@@ -137,7 +167,9 @@ all fixes accumulate as commits on the same branch.
 
 ---
 
-## Step 8: Post comment and remove label
+## Step 8: Post comment with test results and remove label
+
+Include the real test output in the comment — same format as lead-review.
 
 ```bash
 gh pr comment {number} --body "$(cat <<'EOF'
@@ -147,7 +179,17 @@ gh pr comment {number} --body "$(cat <<'EOF'
 
 **Change:** {what was changed and why}
 
-The lead reviewer will re-run tests and review on the next sweep.
+### Tests after fix ✅ / ❌
+
+```
+{actual test output — omit any line containing a secret value}
+```
+
+{If tests passed:}
+✓ Fix verified — tests pass.
+
+{If tests failed or credentials missing:}
+⚠ {status: e.g. "credentials not available to verify" or "tests still failing — see output above"}
 
 ---
 *Fix by Lead on {date}*
@@ -155,6 +197,11 @@ EOF
 )"
 
 gh pr edit {number} --remove-label "status:fix-needed"
+```
+
+If tests pass after the fix, also add the review-passed label so the PR advances:
+```bash
+[ "$TEST_PASSED" = "true" ] &&   gh pr edit {number} --add-label "status:review-passed" 2>/dev/null
 ```
 
 ---
