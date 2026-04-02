@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deepgram Live Transcription — Django Channels</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1a1a2e; }
+    h1 { margin-bottom: 0.5rem; }
+    p.subtitle { color: #555; margin-bottom: 1.5rem; }
+    button { font-size: 1rem; padding: 0.6rem 1.4rem; border: none; border-radius: 6px; cursor: pointer; }
+    #start { background: #13ef93; color: #1a1a2e; }
+    #start:disabled { opacity: 0.5; cursor: not-allowed; }
+    #stop { background: #e74c3c; color: #fff; margin-left: 0.5rem; }
+    #stop:disabled { opacity: 0.5; cursor: not-allowed; }
+    .controls { margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+    #status { font-size: 0.85rem; color: #555; }
+    #transcript-box { background: #f5f5f5; border-radius: 8px; padding: 1rem; min-height: 200px; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; }
+    .interim { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Deepgram Live Transcription</h1>
+  <p class="subtitle">Powered by Django Channels + Deepgram Nova-3</p>
+
+  <div class="controls">
+    <button id="start">Start Listening</button>
+    <button id="stop" disabled>Stop</button>
+    <span id="status"></span>
+  </div>
+
+  <div id="transcript-box"></div>
+
+  <script>
+    const startBtn = document.getElementById('start');
+    const stopBtn = document.getElementById('stop');
+    const status = document.getElementById('status');
+    const box = document.getElementById('transcript-box');
+
+    let ws, mediaStream, processor, audioCtx;
+
+    startBtn.addEventListener('click', async () => {
+      startBtn.disabled = true;
+      status.textContent = 'Requesting microphone…';
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        status.textContent = 'Microphone access denied';
+        startBtn.disabled = false;
+        return;
+      }
+
+      const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${protocol}://${location.host}/ws/transcribe/`);
+
+      ws.onopen = () => {
+        status.textContent = 'Connected — speak now';
+        stopBtn.disabled = false;
+
+        audioCtx = new AudioContext({ sampleRate: 16000 });
+        const source = audioCtx.createMediaStreamSource(mediaStream);
+
+        // ScriptProcessorNode sends raw PCM chunks to the server.
+        // bufferSize 4096 at 16 kHz ≈ 256 ms per chunk — good balance of latency vs overhead.
+        processor = audioCtx.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (e) => {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          const float32 = e.inputBuffer.getChannelData(0);
+          // Convert float32 [-1,1] to int16 for Deepgram's linear16 encoding
+          const int16 = new Int16Array(float32.length);
+          for (let i = 0; i < float32.length; i++) {
+            int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
+          }
+          ws.send(int16.buffer);
+        };
+
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.error) {
+          status.textContent = `Error: ${data.error}`;
+          return;
+        }
+        if (data.is_final) {
+          // Append finalized transcript as permanent text
+          const existing = box.querySelector('.interim');
+          if (existing) existing.remove();
+          box.textContent += data.transcript + '\n';
+        } else {
+          // Show interim result as greyed-out text that gets replaced
+          let interim = box.querySelector('.interim');
+          if (!interim) {
+            interim = document.createElement('span');
+            interim.className = 'interim';
+            box.appendChild(interim);
+          }
+          interim.textContent = data.transcript;
+        }
+        box.scrollTop = box.scrollHeight;
+      };
+
+      ws.onclose = () => {
+        status.textContent = 'Disconnected';
+        cleanup();
+      };
+
+      ws.onerror = () => {
+        status.textContent = 'WebSocket error';
+        cleanup();
+      };
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (ws) ws.close();
+      cleanup();
+      status.textContent = 'Stopped';
+    });
+
+    function cleanup() {
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      if (processor) { processor.disconnect(); processor = null; }
+      if (audioCtx) { audioCtx.close(); audioCtx = null; }
+      if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    }
+  </script>
+</body>
+</html>
