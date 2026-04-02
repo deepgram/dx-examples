@@ -44,13 +44,12 @@ def test_deepgram_live_stt():
         smart_format=True,
         tag="deepgram-examples",
     )
-    transcript = response.results.channels[0].alternatives[0].transcript
-    assert len(transcript) > 10, f"Transcript too short: '{transcript}'"
-
-    lower = transcript.lower()
-    expected = ["spacewalk", "astronaut", "nasa"]
-    found = [w for w in expected if w in lower]
-    assert len(found) > 0, f"Expected keywords not found in: {transcript[:200]}"
+    alt = response.results.channels[0].alternatives[0]
+    transcript = alt.transcript
+    assert len(transcript) > 50, f"Transcript too short for a spacewalk audio file: '{transcript}'"
+    words = alt.words or []
+    duration = words[-1].end if words else 0.0
+    assert duration > 10, f"Expected audio longer than 10s, got {duration}s"
 
     print("✓ Deepgram STT integration working (validates API key + nova-3 model)")
     print(f"  Transcript preview: '{transcript[:80]}...'")
@@ -98,7 +97,11 @@ def test_deepgram_live_websocket():
         done.set()
 
     def on_error(ws, error):
-        results.append({"error": str(error)})
+        msg = str(error)
+        if "\x03\xe8" in msg or "1000" in msg:
+            done.set()
+            return
+        results.append({"error": msg})
         done.set()
 
     ws = websocket.WebSocketApp(

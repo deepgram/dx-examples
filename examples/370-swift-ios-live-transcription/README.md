@@ -23,7 +23,7 @@ A SwiftUI screen with a microphone button that captures audio from the device mi
 ### Option 1: Open as Swift Package
 
 ```bash
-cd examples/260-swift-ios-live-transcription
+cd examples/370-swift-ios-live-transcription
 open Package.swift
 ```
 
