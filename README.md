@@ -13,7 +13,7 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [020](examples/020-twilio-media-streams-node/) | Twilio Media Streams — Real-Time Call Transcription | Node.js | Twilio | ✅ passing |
 | [021](examples/021-twilio-voice-agent-node/) | Twilio Voice + Deepgram Voice Agent — AI Phone Agent | Node.js | Twilio | ✅ passing |
 | [030](examples/030-livekit-agents-python/) | LiveKit Agents — Voice Assistant with Deepgram STT | Python | LiveKit | ✅ passing |
-| [040](examples/040-langchain-stt-tool-python/) | LangChain STT Tool — Transcribe Audio in AI Pipelines | Python | LangChain | ✅ passing |
+| [040](examples/040-langchain-stt-tool-python/) | LangChain STT Tool — Transcribe Audio in AI Pipelines | Python | LangChain | ❌ failing |
 | [050](examples/050-vercel-ai-sdk-node/) | Vercel AI SDK — Transcribe Audio and Generate Speech with Deepgram | Node.js | Vercel AI SDK | ✅ passing |
 | [051](examples/051-nextjs-vercel-ai-sdk-streaming/) | Next.js Streaming STT + TTS with Deepgram via the Vercel AI SDK | Node.js | Vercel AI SDK | ✅ passing |
 | [060](examples/060-discord-bot-node/) | Discord Bot — Transcribe Audio Attachments with Deepgram | Node.js | Discord | ✅ passing |
@@ -33,6 +33,18 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [200](examples/200-vanilla-js-browser-transcription/) | Vanilla JavaScript Browser Transcription (No Bundler) | Node.js | Deepgram SDK | ✅ passing |
 | [210](examples/210-openai-agents-voice-python/) | OpenAI Agents SDK Voice Pipeline with Deepgram STT & TTS | Python | OpenAI Agents SDK | ✅ passing |
 | [220](examples/220-django-channels-live-stt-python/) | Django Channels Real-Time Transcription with Deepgram Live STT | Python | Django | ✅ passing |
+| [230](examples/230-n8n-deepgram-community-node-typescript/) | n8n Community Nodes for Deepgram | Node.js | n8n | ❌ failing |
+| [240](examples/240-nuxt-streaming-stt-tts-ts/) | Nuxt Streaming STT + TTS with Deepgram | Node.js | Nuxt | ✅ passing |
+| [260](examples/260-nestjs-websocket-stt/) | NestJS WebSocket Real-Time Transcription | Node.js | NestJS | ✅ passing |
+| [270](examples/270-sveltekit-live-transcription-ts/) | SvelteKit Real-Time Live Transcription | Node.js | SvelteKit | ✅ passing |
+| [280](examples/280-express-react-live-transcription-ts/) | Express.js + React Live Transcription (TypeScript) | Node.js | Express + React | ❌ failing |
+| [290](examples/290-aws-lambda-python-transcription/) | AWS Lambda Serverless Audio Transcription | Python | AWS Lambda | ✅ passing |
+| [300](examples/300-spring-boot-live-transcription-java/) | Spring Boot Real-Time Transcription with Deepgram | Java | Spring Boot | — |
+| [310](examples/310-crewai-voice-agents-python/) | CrewAI Voice-Enabled Multi-Agent System with Deepgram | Python | CrewAI | ✅ passing |
+| [340](examples/340-tauri-live-transcription-rust-ts/) | Tauri Desktop Live Transcription | Rust | Tauri | ✅ passing |
+| [350](examples/350-asterisk-freeswitch-deepgram-stt-python/) | Asterisk / FreeSWITCH PBX to Deepgram Streaming STT | Python | Asterisk/FreeSWITCH | ❌ failing |
+| [360](examples/360-kotlin-android-live-transcription/) | Kotlin Android Live Transcription | Kotlin | Jetpack Compose | — |
+| [370](examples/370-swift-ios-live-transcription/) | Swift iOS Live Transcription | Swift | SwiftUI | — |
 <!-- examples-table-end -->
 
 *Status last updated 2026-04-02.*
