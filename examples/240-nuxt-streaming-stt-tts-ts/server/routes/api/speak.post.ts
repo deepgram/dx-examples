@@ -15,7 +15,6 @@ export default defineEventHandler(async (event) => {
 
   const deepgram = new DeepgramClient({ apiKey: config.deepgramApiKey });
 
-  // speak.v1.audio.generate returns a BinaryResponse with raw audio bytes
   const response = await deepgram.speak.v1.audio.generate({
     text: body.text,
     model: 'aura-2-thalia-en',
@@ -24,7 +23,7 @@ export default defineEventHandler(async (event) => {
     tag: 'deepgram-examples',
   });
 
-  const audioBuffer = await response.getBody();
+  const audioBuffer = Buffer.from(await response.arrayBuffer());
 
   setResponseHeaders(event, {
     'Content-Type': 'application/octet-stream',
