@@ -1,0 +1,30 @@
+{
+  "name": "deepgram-sveltekit-live-transcription",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SvelteKit app that streams microphone audio to Deepgram live STT and displays real-time transcripts",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node build/index.js",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "5.0.0",
+    "@sveltejs/adapter-node": "^5.2.0",
+    "@sveltejs/kit": "^2.21.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "dotenv": "^16.4.0",
+    "svelte": "^5.0.0",
+    "vite": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
