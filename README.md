@@ -10,10 +10,12 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | # | Example | Language | Integration | Status |
 |---|---------|----------|-------------|--------|
 | [010](examples/010-getting-started-node/) | Getting Started — Transcribe a URL with Node.js | Node.js | Deepgram SDK | ✅ passing |
-| [020](examples/020-twilio-media-streams-node/) | Twilio Media Streams — Real-Time Call Transcription | Node.js | Twilio | ❌ failing |
+| [020](examples/020-twilio-media-streams-node/) | Twilio Media Streams — Real-Time Call Transcription | Node.js | Twilio | ✅ passing |
+| [021](examples/021-twilio-voice-agent-node/) | Twilio Voice + Deepgram Voice Agent — AI Phone Agent | Node.js | Twilio | ✅ passing |
 | [030](examples/030-livekit-agents-python/) | LiveKit Agents — Voice Assistant with Deepgram STT | Python | LiveKit | ✅ passing |
 | [040](examples/040-langchain-stt-tool-python/) | LangChain STT Tool — Transcribe Audio in AI Pipelines | Python | LangChain | ✅ passing |
 | [050](examples/050-vercel-ai-sdk-node/) | Vercel AI SDK — Transcribe Audio and Generate Speech with Deepgram | Node.js | Vercel AI SDK | ✅ passing |
+| [051](examples/051-nextjs-vercel-ai-sdk-streaming/) | Next.js Streaming STT + TTS with Deepgram via the Vercel AI SDK | Node.js | Vercel AI SDK | ✅ passing |
 | [060](examples/060-discord-bot-node/) | Discord Bot — Transcribe Audio Attachments with Deepgram | Node.js | Discord | ✅ passing |
 | [070](examples/070-vonage-voice-websocket-node/) | Vonage Voice API — Real-Time Call Transcription | Node.js | Vonage | ✅ passing |
 | [080](examples/080-pipecat-voice-pipeline-python/) | Pipecat Voice Pipeline — Conversational Bot with Deepgram STT & TTS | Python | Pipecat | ✅ passing |
@@ -30,6 +32,7 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [190](examples/190-daily-co-transcription-node/) | Daily.co Real-Time Transcription Overlay | Node.js | Daily.co | ❌ failing |
 | [200](examples/200-vanilla-js-browser-transcription/) | Vanilla JavaScript Browser Transcription (No Bundler) | Node.js | Deepgram SDK | ✅ passing |
 | [210](examples/210-openai-agents-voice-python/) | OpenAI Agents SDK Voice Pipeline with Deepgram STT & TTS | Python | OpenAI Agents SDK | ✅ passing |
+| [220](examples/220-django-channels-live-stt-python/) | Django Channels Real-Time Transcription with Deepgram Live STT | Python | Django | ✅ passing |
 <!-- examples-table-end -->
 
 *Status last updated 2026-04-02.*
