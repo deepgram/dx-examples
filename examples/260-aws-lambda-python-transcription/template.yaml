@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Deepgram audio transcription Lambda — accepts audio via URL or base64 upload
+  and returns a transcript powered by Deepgram nova-3.
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 256
+    Runtime: python3.12
+
+Parameters:
+  DeepgramApiKey:
+    Type: String
+    NoEcho: true
+    Description: Deepgram API key from https://console.deepgram.com/
+
+Resources:
+  TranscribeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handler.handler
+      Environment:
+        Variables:
+          DEEPGRAM_API_KEY: !Ref DeepgramApiKey
+      Events:
+        Transcribe:
+          Type: Api
+          Properties:
+            Path: /transcribe
+            Method: post
+
+Outputs:
+  TranscribeApi:
+    Description: API Gateway endpoint URL for the transcribe function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/transcribe"
+  TranscribeFunction:
+    Description: Lambda function ARN
+    Value: !GetAtt TranscribeFunction.Arn
