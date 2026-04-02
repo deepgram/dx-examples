@@ -54,11 +54,32 @@ jobs:
           git config user.name "examples-bot"
           git config user.email "noreply@deepgram.com"
 
+      - name: Check actor is a team member
+        id: auth
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ACTOR="${{ github.actor }}"
+          # Bots are always allowed — they act on behalf of the system
+          if [[ "$ACTOR" == *"[bot]"* ]] || [[ "$ACTOR" == "github-actions" ]]; then
+            echo "allowed=true" >> $GITHUB_OUTPUT; exit 0
+          fi
+          PERM=$(gh api "repos/${{ github.repository }}/collaborators/${ACTOR}/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+          if [[ "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
+            echo "allowed=true" >> $GITHUB_OUTPUT
+          else
+            echo "allowed=false" >> $GITHUB_OUTPUT
+            echo "Actor $ACTOR ($PERM) is not a team member — silently exiting"
+          fi
+
       - name: Get date
         id: date
         run: echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
       - name: Run instruction
+        if: steps.auth.outputs.allowed != 'false'
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}

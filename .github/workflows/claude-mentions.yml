@@ -27,15 +27,15 @@ jobs:
           git config user.name "examples-bot"
           git config user.email "noreply@deepgram.com"
 
-      - name: Check write permission
-        id: membership
+      - name: Check actor is a team member
+        id: auth
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           USERNAME="${{ github.event.comment.user.login }}"
           # Skip bots
           if [[ "$USERNAME" == *"[bot]"* ]] || [[ "$USERNAME" == "github-actions" ]]; then
-            echo "is_member=false" >> $GITHUB_OUTPUT
+            echo "allowed=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           # Check collaborator permission level — must be write, maintain, or admin
@@ -43,16 +43,16 @@ jobs:
             --jq '.permission' 2>/dev/null || echo "none")
           echo "Permission for $USERNAME: $PERM"
           if [[ "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
-            echo "is_member=true" >> $GITHUB_OUTPUT
+            echo "allowed=true" >> $GITHUB_OUTPUT
             echo "$USERNAME has $PERM access — allowing"
           else
-            echo "is_member=false" >> $GITHUB_OUTPUT
+            echo "allowed=false" >> $GITHUB_OUTPUT
             echo "$USERNAME has $PERM access — skipping (need write+)"
           fi
 
       - name: Get context
         id: ctx
-        if: steps.membership.outputs.is_member == 'true'
+        if: steps.auth.outputs.allowed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -75,7 +75,7 @@ jobs:
           fi
 
       - name: Respond
-        if: steps.membership.outputs.is_member == 'true'
+        if: steps.auth.outputs.allowed == 'true'
         uses: anthropics/claude-code-action@beta
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
