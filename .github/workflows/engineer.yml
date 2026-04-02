@@ -13,10 +13,6 @@ on:
         description: 'Queue issue number to build (optional)'
         required: false
 
-concurrency:
-  group: engineer
-  cancel-in-progress: false
-
 jobs:
   run:
     if: >
