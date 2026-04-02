@@ -1,6 +1,6 @@
 livekit-agents[silero,turn-detector]~=1.4
 livekit-plugins-deepgram~=1.4
 livekit-plugins-noise-cancellation~=0.2
-deepgram-sdk>=3.0.0
+deepgram-sdk==6.1.1
 openai>=1.0.0
 python-dotenv>=1.0.0
