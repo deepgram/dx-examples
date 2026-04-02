@@ -1,5 +1,5 @@
 {
-  "name": "deepgram-react-native-live-transcription",
+  "name": "deepgram-expo-live-transcription",
   "version": "1.0.0",
   "description": "Live speech-to-text in React Native using Deepgram WebSocket streaming",
   "main": "src/index.js",

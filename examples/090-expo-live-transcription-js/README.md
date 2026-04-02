@@ -1,4 +1,4 @@
-# React Native Live Transcription
+# Expo Live Transcription
 
 Turn speech into text in real-time on iOS and Android. This example provides a React Native hook (`useDeepgramTranscription`) that streams microphone audio to Deepgram's live STT API over WebSocket, displaying both interim and final transcripts as the user speaks.
 
