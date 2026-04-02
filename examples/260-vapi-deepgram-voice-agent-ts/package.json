@@ -1,0 +1,27 @@
+{
+  "name": "deepgram-vapi-voice-agent-ts",
+  "version": "1.0.0",
+  "description": "Vapi.ai voice agent using Deepgram for STT and TTS with server-side webhook handling",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "create-assistant": "node dist/create-assistant.js",
+    "dev": "tsc && node dist/index.js",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "5.0.0",
+    "@vapi-ai/server-sdk": "^0.11.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
