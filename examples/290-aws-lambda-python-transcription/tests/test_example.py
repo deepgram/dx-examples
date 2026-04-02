@@ -38,13 +38,12 @@ def test_deepgram_stt_direct():
         smart_format=True,
         tag="deepgram-examples",
     )
-    transcript = response.results.channels[0].alternatives[0].transcript
-    assert len(transcript) > 10, "Transcript too short"
-
-    lower = transcript.lower()
-    expected = ["spacewalk", "astronaut", "nasa"]
-    found = [w for w in expected if w in lower]
-    assert len(found) > 0, f"Expected keywords not found in: {transcript[:200]}"
+    alt = response.results.channels[0].alternatives[0]
+    transcript = alt.transcript
+    assert len(transcript) > 50, "Transcript too short for a spacewalk audio file"
+    words = alt.words or []
+    duration = words[-1].end if words else 0.0
+    assert duration > 10, f"Expected audio longer than 10s, got {duration}s"
 
     print("  Deepgram STT integration working")
     print(f"  Transcript preview: '{transcript[:80]}...'")

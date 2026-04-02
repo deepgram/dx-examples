@@ -12,7 +12,6 @@ most files complete in a few seconds.
 import base64
 import json
 import os
-import urllib.request
 
 import boto3
 from deepgram import DeepgramClient
@@ -23,13 +22,11 @@ def handler(event, context):
     if not api_key:
         return _response(500, {"error": "DEEPGRAM_API_KEY not configured"})
 
-    # SDK v5 Python: passing the key explicitly because Lambda environment
-    # variables are the standard config path (no .env file in Lambda).
-    client = DeepgramClient(api_key)
-
     body = _parse_body(event)
     if "error" in body:
         return _response(400, body)
+
+    client = DeepgramClient(api_key=api_key)
 
     try:
         if "url" in body:
