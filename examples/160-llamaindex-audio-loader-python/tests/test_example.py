@@ -34,6 +34,7 @@ def test_deepgram_stt():
         url=AUDIO_URL,
         model="nova-3",
         smart_format=True,
+        tag="deepgram-examples",
     )
     transcript = response.results.channels[0].alternatives[0].transcript
     assert len(transcript) > 10, "Transcript too short"
