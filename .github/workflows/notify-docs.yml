@@ -1,0 +1,89 @@
+name: Notify docs — new example ready
+
+# When a new example PR merges to main, create a [Suggestion] issue in deepgram-docs
+# so the content-pm workflow can queue a tutorial guide for it.
+#
+# Required secrets:
+#   DOCS_PAT — PAT with issues:write scope on deepgram/deepgram-docs
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  notify:
+    name: Create guide suggestion in deepgram-docs
+    if: |
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.title, '[Example]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Find merged example and create suggestion
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_PAT }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          # Find the example directory added by this PR
+          EXAMPLE_DIR=$(git diff --name-only HEAD~1 HEAD \
+            | grep '^examples/' \
+            | head -1 \
+            | cut -d/ -f1-2)
+
+          if [ -z "$EXAMPLE_DIR" ]; then
+            echo "No example directory found in diff — skipping"
+            exit 0
+          fi
+
+          SLUG=$(basename "$EXAMPLE_DIR")
+          echo "Example slug: $SLUG"
+
+          # Read the example README for title and description
+          README_TITLE=$(head -3 "$EXAMPLE_DIR/README.md" 2>/dev/null \
+            | grep '^#' | head -1 | sed 's/^# *//' || echo "$SLUG")
+
+          # Check it's marked passing in the README table
+          PASSING=$(grep -F "$SLUG" README.md | grep -c "✅ passing" || true)
+          if [ "$PASSING" -eq 0 ]; then
+            echo "Example not yet marked passing — skipping"
+            exit 0
+          fi
+
+          # Create suggestion issue in deepgram-docs
+          gh issue create \
+            --repo deepgram/deepgram-docs \
+            --title "[Suggestion] Guide for ${SLUG}" \
+            --label "type:suggestion" \
+            --body "## What to write
+
+A step-by-step tutorial guide for the [${README_TITLE}](https://github.com/deepgram/dx-examples/tree/main/${EXAMPLE_DIR}) example.
+
+## Why this matters
+
+New example added in ${PR_URL} — a guide will help developers discover and follow along with it.
+
+<!-- metadata
+example_slug: ${SLUG}
+source: dx-examples
+-->
+
+## Source example
+
+- **Slug:** \`${SLUG}\`
+- **Example:** [${README_TITLE}](https://github.com/deepgram/dx-examples/tree/main/${EXAMPLE_DIR})
+- **Merged PR:** ${PR_URL}
+
+---
+*Auto-created by notify-docs workflow after example merge.*"
+
+          echo "Suggestion issue created in deepgram-docs for $SLUG"
