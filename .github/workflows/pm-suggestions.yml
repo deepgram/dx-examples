@@ -77,16 +77,19 @@ jobs:
           fi
 
           # Check write permission on this repo
+          IS_ORG_MEMBER=false
+          if gh api "orgs/deepgram/members/${USERNAME}" -i 2>/dev/null | head -1 | grep -q "204"; then
+            IS_ORG_MEMBER=true
+          fi
           PERM=$(gh api "repos/${{ github.repository }}/collaborators/${USERNAME}/permission" \
             --jq '.permission' 2>/dev/null || echo "none")
-          echo "Permission for $USERNAME: $PERM"
 
-          if [[ "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
+          if [[ "$IS_ORG_MEMBER" == "true" || "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
             echo "gate=pass" >> $GITHUB_OUTPUT
-            echo "reason=has-write-access" >> $GITHUB_OUTPUT
+            echo "reason=deepgram-member-or-collaborator" >> $GITHUB_OUTPUT
           else
             echo "gate=hold" >> $GITHUB_OUTPUT
-            echo "reason=no-write-access" >> $GITHUB_OUTPUT
+            echo "reason=not-deepgram-member" >> $GITHUB_OUTPUT
             echo "username=$USERNAME" >> $GITHUB_OUTPUT
           fi
 

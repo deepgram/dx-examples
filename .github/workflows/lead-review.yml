@@ -65,13 +65,17 @@ jobs:
           if [[ "$ACTOR" == *"[bot]"* ]] || [[ "$ACTOR" == "github-actions" ]]; then
             echo "allowed=true" >> $GITHUB_OUTPUT; exit 0
           fi
+          IS_ORG_MEMBER=false
+          if gh api "orgs/deepgram/members/${ACTOR}" -i 2>/dev/null | head -1 | grep -q "204"; then
+            IS_ORG_MEMBER=true
+          fi
           PERM=$(gh api "repos/${{ github.repository }}/collaborators/${ACTOR}/permission" \
             --jq '.permission' 2>/dev/null || echo "none")
-          if [[ "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
+          if [[ "$IS_ORG_MEMBER" == "true" || "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
             echo "allowed=true" >> $GITHUB_OUTPUT
           else
             echo "allowed=false" >> $GITHUB_OUTPUT
-            echo "Actor $ACTOR ($PERM) is not a team member — silently exiting"
+            echo "Actor $ACTOR not a Deepgram org member or repo collaborator — silently exiting"
           fi
 
       - name: Get date

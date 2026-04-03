@@ -38,16 +38,19 @@ jobs:
             echo "allowed=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          # Check collaborator permission level — must be write, maintain, or admin
+          # Check Deepgram org membership OR repo write permission — before any AI engagement
+          IS_ORG_MEMBER=false
+          if gh api "orgs/deepgram/members/${USERNAME}" -i 2>/dev/null | head -1 | grep -q "204"; then
+            IS_ORG_MEMBER=true
+          fi
           PERM=$(gh api "repos/${{ github.repository }}/collaborators/${USERNAME}/permission" \
             --jq '.permission' 2>/dev/null || echo "none")
-          echo "Permission for $USERNAME: $PERM"
-          if [[ "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
+          if [[ "$IS_ORG_MEMBER" == "true" || "$PERM" == "write" || "$PERM" == "maintain" || "$PERM" == "admin" ]]; then
             echo "allowed=true" >> $GITHUB_OUTPUT
-            echo "$USERNAME has $PERM access — allowing"
+            echo "$USERNAME allowed (org=$IS_ORG_MEMBER repo=$PERM)"
           else
             echo "allowed=false" >> $GITHUB_OUTPUT
-            echo "$USERNAME has $PERM access — skipping (need write+)"
+            echo "$USERNAME not allowed — silently exiting"
           fi
 
       - name: Get context
