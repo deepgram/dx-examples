@@ -63,17 +63,15 @@ def transcribe_voice(file_path_or_url: str, api_key: str) -> str | None:
     if not audio_bytes:
         return None
 
-    client = DeepgramClient(api_key)
+    client = DeepgramClient(api_key=api_key)
 
     # SDK v5 Python: transcribe_file() accepts raw bytes.
     # Deepgram auto-detects the audio format from the file header.
     # nova-3 is the current flagship model (2025). For phone-call
     # audio use nova-3-phonecall; for medical dictation use nova-3-medical.
     response = client.listen.v1.media.transcribe_file(
-        audio_bytes,
+        request=audio_bytes,
         model="nova-3",
-        # smart_format adds punctuation, capitalisation, and paragraph
-        # breaks. Adds ~10 ms latency — almost always worth enabling.
         smart_format=True,
         tag="deepgram-examples",
     )
@@ -115,13 +113,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # nova-3 is the current flagship model (2025). For phone-call
         # audio use nova-3-phonecall; for medical dictation use nova-3-medical.
         response = client.listen.v1.media.transcribe_file(
-            audio_bytes,
+            request=audio_bytes,
             model="nova-3",
-            # smart_format adds punctuation, capitalisation, and paragraph
-            # breaks. Adds ~10 ms latency — almost always worth enabling.
             smart_format=True,
-            # Telegram voice messages are typically one speaker. Enable
-            # diarize=True if you expect multi-speaker forwarded recordings.
             tag="deepgram-examples",
         )
 
