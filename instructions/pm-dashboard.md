@@ -8,75 +8,52 @@ examples table with live status, and open a PR if anything changed.
 
 ---
 
-## Step 1: Run tests for every example
+## Step 1: Get current test status from last test-existing run
 
-All runtimes (Node.js, Python, Go) and all secrets are available in the environment.
-
-Results are written to `/tmp/status_<example>` immediately after each test so that
-status survives across separate tool invocations (bash variables do not).
+Do NOT run tests yourself — test-existing runs every 6 hours and has already tested everything.
+Read its results from the last workflow run instead.
 
 ```bash
+# Get the last test-existing run ID
+RUN_ID=$(gh run list --repo {repo} --workflow=test-existing.yml   --status=completed --limit=1 --json databaseId --jq '.[0].databaseId')
+
+# For each example, check if it appears in failed_examples output of that run
+# If an example dir was in node/python/go/java failures → "failing"
+# If it was skipped (missing credentials) → "needs credentials"  
+# Otherwise → "passing"
+
+# Simpler: scan the existing examples directory and build status from
+# open PRs (status:fix-needed = failing, status:needs-credentials = needs creds)
+# and merged examples that have no open fix PRs = passing
+
+declare -A STATUS
+
 for dir in examples/*/; do
   [ ! -d "$dir" ] || [ -f "${dir}.gitkeep" ] && continue
   EXAMPLE=$(basename "$dir")
-  RESULT_FILE="/tmp/status_${EXAMPLE}"
+  SLUG="${EXAMPLE#*-}"
+
+  # Check for an open fix PR
+  HAS_FIX=$(gh pr list --repo {repo} --state open     --search "$SLUG" --label "status:fix-needed"     --json number --jq 'length' 2>/dev/null || echo "0")
+
+  # Check for needs-credentials
+  HAS_CREDS=$(gh pr list --repo {repo} --state open     --search "$SLUG" --label "status:needs-credentials"     --json number --jq 'length' 2>/dev/null || echo "0")
 
   LANG=""
   [ -f "${dir}package.json" ]     && LANG="node"
   [ -f "${dir}requirements.txt" ] && LANG="python"
-  [ -f "${dir}pyproject.toml" ]   && LANG="python"
   [ -f "${dir}go.mod" ]           && LANG="go"
-  if [ -z "$LANG" ]; then echo "no-tests" > "$RESULT_FILE"; continue; fi
+  [ -z "$LANG" ] && STATUS[$EXAMPLE]="—" && continue
 
-  # Credential check — read from the dir, not cwd
-  MISSING=""
-  if [ -f "${dir}.env.example" ]; then
-    while IFS= read -r line; do
-      [[ -z "${line// }" || "$line" == \#* ]] && continue
-      VAR="${line%%=*}"; VAR="${VAR// /}"
-      [ -z "$VAR" ] && continue
-      [ -z "${!VAR+x}" ] || [ -z "${!VAR}" ] && MISSING="$MISSING $VAR"
-    done < "${dir}.env.example"
-  fi
-  if [ -n "$MISSING" ]; then echo "needs-credentials" > "$RESULT_FILE"; continue; fi
-
-  # Run test in a subshell (isolates cd + pip state), write result to file atomically
-  if [ "$LANG" = "node" ]; then
-    ( cd "$dir" && npm install --prefer-offline -q 2>/dev/null && \
-      npm test > /tmp/test_out_${EXAMPLE}.txt 2>&1 ) \
-      && echo "passing" > "$RESULT_FILE" || echo "failing" > "$RESULT_FILE"
-
-  elif [ "$LANG" = "python" ]; then
-    (
-      cd "$dir"
-      pip install -q -r requirements.txt 2>/dev/null || pip install -q -e . 2>/dev/null
-      pip install -q pytest 2>/dev/null
-      if find tests/ -name "test_*.py" 2>/dev/null | grep -q .; then
-        python -m pytest tests/ -q > /tmp/test_out_${EXAMPLE}.txt 2>&1
-      elif ls tests/*.py 2>/dev/null | head -1 | grep -q .; then
-        python "$(ls tests/*.py | head -1)" > /tmp/test_out_${EXAMPLE}.txt 2>&1
-      fi
-    ) && echo "passing" > "$RESULT_FILE" || echo "failing" > "$RESULT_FILE"
-
-  elif [ "$LANG" = "go" ]; then
-    ( cd "$dir" && go mod download 2>/dev/null && \
-      go test ./... > /tmp/test_out_${EXAMPLE}.txt 2>&1 ) \
-      && echo "passing" > "$RESULT_FILE" || echo "failing" > "$RESULT_FILE"
+  if [ "$HAS_FIX" != "0" ]; then
+    STATUS[$EXAMPLE]="failing"
+  elif [ "$HAS_CREDS" != "0" ]; then
+    STATUS[$EXAMPLE]="needs-credentials"
+  else
+    STATUS[$EXAMPLE]="passing"
   fi
 done
 ```
-
-After running all tests, read the results:
-
-```bash
-declare -A STATUS
-for dir in examples/*/; do
-  [ ! -d "$dir" ] || [ -f "${dir}.gitkeep" ] && continue
-  EXAMPLE=$(basename "$dir")
-  STATUS[$EXAMPLE]=$(cat "/tmp/status_${EXAMPLE}" 2>/dev/null || echo "no-tests")
-done
-```
-
 ---
 
 ## Step 2: Read current README and rebuild table

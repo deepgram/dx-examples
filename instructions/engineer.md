@@ -31,17 +31,24 @@ kapa_search() {
 ## Step 1: Find the queue issue to build
 
 ```bash
+# Pick oldest issue ready to build (action:generate) or needing research (action:research)
 gh issue list \
-  --label "queue:new-example,action:generate" \
+  --label "queue:new-example" \
   --state open \
-  --json number,title,body,comments \
-  --jq 'sort_by(.createdAt) | .[0]'
+  --json number,title,body,labels,comments \
+  --jq '[.[] | select(.labels | map(.name) | any(. == "action:generate" or . == "action:research"))] | sort_by(.createdAt) | .[0]'
 ```
 
 If none found, stop.
 
-Read the researcher comment (starts with "## 🔬 Research findings") if present.
-This is your primary source of truth for SDK patterns and credentials needed.
+If the issue has `action:research` (not yet researched), do the research yourself via Kapa before building:
+```bash
+kapa_search "deepgram {platform} SDK integration {language} example"
+kapa_search "{specific SDK} live transcription {language}"
+```
+
+Read any existing researcher comment (starts with "## 🔬 Research findings") if present.
+Advance the issue to generate when you start: remove `action:research`, add `action:generate`.
 
 ---
 
@@ -325,6 +332,52 @@ if missing:
 
 ---
 
+## Step 5.5: Run tests before opening the PR
+
+All runtimes (Node.js, Python, Go) and credentials are available in the environment.
+
+```bash
+cd "$EXAMPLE_DIR"
+
+# Check credentials
+MISSING=""
+if [ -f ".env.example" ]; then
+  while IFS= read -r line; do
+    [[ -z "${line// }" || "$line" == \#* ]] && continue
+    VAR="${line%%=*}"; VAR="${VAR// /}"
+    [ -z "$VAR" ] && continue
+    [ -z "${!VAR+x}" ] || [ -z "${!VAR}" ] && MISSING="$MISSING $VAR"
+  done < ".env.example"
+fi
+
+TEST_OUTPUT=""
+TEST_PASSED=false
+
+if [ -n "$MISSING" ]; then
+  TEST_OUTPUT="⏳ Missing credentials: $MISSING — cannot verify tests in CI"
+elif [ -f "package.json" ]; then
+  npm install --prefer-offline -q 2>/dev/null || npm install -q
+  TEST_OUTPUT=$(npm test 2>&1) && TEST_PASSED=true
+elif [ -f "requirements.txt" ]; then
+  pip install -q -r requirements.txt 2>/dev/null
+  pip install -q pytest 2>/dev/null
+  if find tests/ -name "test_*.py" 2>/dev/null | grep -q .; then
+    TEST_OUTPUT=$(python -m pytest tests/ -v 2>&1) && TEST_PASSED=true
+  else
+    TEST_OUTPUT=$(python "$(ls tests/*.py | head -1)" 2>&1) && TEST_PASSED=true
+  fi
+elif [ -f "go.mod" ]; then
+  go mod download 2>/dev/null
+  TEST_OUTPUT=$(go test ./... -v 2>&1) && TEST_PASSED=true
+fi
+
+cd -
+```
+
+If tests fail AND credentials are present: make one fix attempt, then re-run.
+Include `$TEST_OUTPUT` in the PR body under a "## Tests" section so the reviewer sees real results.
+Do NOT include any line from the output that contains a credential value.
+
 ## Step 6: Commit and open PR
 
 ```bash
@@ -344,6 +397,9 @@ ORIGIN_NUM=$(echo "$QUEUE_BODY" | grep -oE 'Requested in #([0-9]+)' | grep -oE '
 if [ -n "$ORIGIN_NUM" ]; then
   ORIGIN_ISSUE="Closes #${ORIGIN_NUM}"
 fi
+
+TEST_STATUS="✅ Tests passed"
+[ "$TEST_PASSED" != "true" ] && TEST_STATUS="⚠️ Tests not verified (missing credentials or pre-open failure)"
 
 PR_URL=$(gh pr create \
   --title "[Example] ${NEXT} — {Title}" \
@@ -368,6 +424,13 @@ integrations: {integration-slug}
 
 ### Required secrets
 {vars beyond DEEPGRAM_API_KEY, or "None — only DEEPGRAM_API_KEY required"}
+
+### Tests
+$TEST_STATUS
+
+\`\`\`
+$(echo "$TEST_OUTPUT" | tail -30)
+\`\`\`
 
 ${ORIGIN_ISSUE}
 

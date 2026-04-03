@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [labeled]
   schedule:
-    - cron: '57 * * * *'   # Hourly sweep for stale fix-needed PRs
+    - cron: '57 */4 * * *'  # Fallback sweep every 4h (event-driven via label trigger)
   workflow_dispatch:
     inputs:
       pr_number:

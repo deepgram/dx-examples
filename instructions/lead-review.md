@@ -153,6 +153,32 @@ Check:
 
 ---
 
+## Step 5.5: Fix inline if possible
+
+If tests failed OR there are clear fixable issues (wrong SDK pin, missing import,
+wrong package version, word-list assertion instead of proportional check):
+
+**Try to fix in this same run before posting the review:**
+1. Identify the exact problem from the test output and code review
+2. Make the minimal change to src/ and/or tests/
+3. Re-run the tests
+4. If fixed: commit the fix to the PR branch, then post an APPROVED review
+5. If not fixable in one attempt: post CHANGES REQUESTED with specific guidance
+
+This eliminates a full round-trip through lead-fix for simple issues.
+
+```bash
+# After fixing
+git add examples/{slug}/
+git commit -m "fix(examples): {what was fixed}"
+git push origin "$BRANCH"
+```
+
+Only escalate to lead-fix (by adding status:fix-needed) if the fix requires:
+- Significant architecture changes
+- External service debugging you can't do from this environment
+- More than ~20 lines of changes
+
 ## Step 6: Post the review comment
 
 Include real test output in the comment. Structure:

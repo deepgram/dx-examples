@@ -1,12 +1,14 @@
 name: Engineer
 
+# Builds new examples from the queue, runs tests, and opens the PR.
+# The engineer does its own Kapa research — no separate researcher step needed.
+# Only opens a PR when tests pass (or documents what failed after one fix attempt).
+
 on:
-  schedule:
-    - cron: '27 * * * *'   # Hourly at :27
   issues:
-    types:
-      - opened
-      - labeled
+    types: [labeled]         # Fires when action:generate or action:research is applied
+  schedule:
+    - cron: '27 */4 * * *'  # Fallback sweep every 4h (catches missed label events)
   workflow_dispatch:
     inputs:
       issue_number:
@@ -19,7 +21,8 @@ jobs:
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' &&
-       contains(github.event.issue.labels.*.name, 'queue:new-example'))
+       (contains(github.event.issue.labels.*.name, 'action:generate') ||
+        contains(github.event.issue.labels.*.name, 'action:research')))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -37,6 +40,18 @@ jobs:
         run: |
           git config user.name "examples-bot"
           git config user.email "noreply@deepgram.com"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
 
       - name: Check actor is a team member
         id: auth
@@ -65,14 +80,13 @@ jobs:
         id: sdk
         run: |
           latest() { curl -sf "https://api.github.com/repos/deepgram/$1/releases/latest" | jq -r '.tag_name // "unknown"'; }
-          echo "python=$(latest deepgram-python-sdk)"   >> $GITHUB_OUTPUT
-          echo "js=$(latest deepgram-js-sdk)"           >> $GITHUB_OUTPUT
-          echo "go=$(latest deepgram-go-sdk)"           >> $GITHUB_OUTPUT
-          echo "java=$(latest deepgram-java-sdk)"       >> $GITHUB_OUTPUT
-          echo "rust=$(latest deepgram-rust-sdk)"       >> $GITHUB_OUTPUT
-          echo "dotnet=$(latest deepgram-dotnet-sdk)"   >> $GITHUB_OUTPUT
-          echo "cli=$(latest cli)"                      >> $GITHUB_OUTPUT
-          # Log for visibility
+          echo "python=$(latest deepgram-python-sdk)"  >> $GITHUB_OUTPUT
+          echo "js=$(latest deepgram-js-sdk)"          >> $GITHUB_OUTPUT
+          echo "go=$(latest deepgram-go-sdk)"          >> $GITHUB_OUTPUT
+          echo "java=$(latest deepgram-java-sdk)"      >> $GITHUB_OUTPUT
+          echo "rust=$(latest deepgram-rust-sdk)"      >> $GITHUB_OUTPUT
+          echo "dotnet=$(latest deepgram-dotnet-sdk)"  >> $GITHUB_OUTPUT
+          echo "cli=$(latest cli)"                     >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT | grep -E "^(python|js|go|java|rust|dotnet|cli)="
 
       - name: Check back pressure
@@ -81,21 +95,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Count PRs that are reviewed and waiting for human merge.
-          # If 5 or more are queued, pause building new examples.
           READY=$(gh pr list --repo ${{ github.repository }} --state open \
             --label "status:review-passed" \
             --json number --jq 'length' 2>/dev/null || echo "0")
           echo "PRs ready to merge: $READY"
           if [ "$READY" -ge 5 ]; then
             echo "blocked=true" >> $GITHUB_OUTPUT
-            echo "⏸ Back pressure: $READY PRs already waiting for merge — skipping this run"
+            echo "⏸ Back pressure: $READY PRs waiting for merge — skipping"
           else
             echo "blocked=false" >> $GITHUB_OUTPUT
             echo "✓ Pipeline has capacity ($READY/5 slots used)"
           fi
 
-      - name: Run instruction
+      - name: Build, test, and open PR
         if: steps.auth.outputs.allowed != 'false' && steps.backpressure.outputs.blocked != 'true'
         uses: anthropics/claude-code-action@beta
         with:
@@ -104,7 +116,7 @@ jobs:
           mode: agent
           model: claude-opus-4-6
           allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"
-          timeout_minutes: 45
+          timeout_minutes: 60
           direct_prompt: |
             Read and execute instructions/engineer.md.
 
@@ -128,4 +140,24 @@ jobs:
         env:
           KAPA_API_KEY: ${{ secrets.KAPA_API_KEY }}
           KAPA_PROJECT_ID: ${{ vars.KAPA_PROJECT_ID }}
-
+          DEEPGRAM_API_KEY:      ${{ secrets.DEEPGRAM_API_KEY }}
+          TWILIO_ACCOUNT_SID:    ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:     ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_PHONE_NUMBER:   ${{ secrets.TWILIO_PHONE_NUMBER }}
+          LIVEKIT_URL:           ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY:       ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET:    ${{ secrets.LIVEKIT_API_SECRET }}
+          OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
+          DISCORD_BOT_TOKEN:     ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_ID:     ${{ secrets.DISCORD_CLIENT_ID }}
+          VONAGE_APPLICATION_ID: ${{ secrets.VONAGE_APPLICATION_ID }}
+          VONAGE_PRIVATE_KEY:    ${{ secrets.VONAGE_PRIVATE_KEY }}
+          DAILY_API_KEY:         ${{ secrets.DAILY_API_KEY }}
+          PIPECAT_API_KEY:       ${{ secrets.PIPECAT_API_KEY }}
+          SLACK_BOT_TOKEN:       ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_TOKEN:       ${{ secrets.SLACK_APP_TOKEN }}
+          TELEGRAM_BOT_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ZOOM_ACCOUNT_ID:       ${{ secrets.ZOOM_ACCOUNT_ID }}
+          ZOOM_CLIENT_ID:        ${{ secrets.ZOOM_CLIENT_ID }}
+          ZOOM_CLIENT_SECRET:    ${{ secrets.ZOOM_CLIENT_SECRET }}
+          ZOOM_WEBHOOK_SECRET_TOKEN: ${{ secrets.ZOOM_WEBHOOK_SECRET_TOKEN }}

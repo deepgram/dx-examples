@@ -6,7 +6,7 @@ on:
     paths:
       - 'examples/**'
   schedule:
-    - cron: '37 * * * *'   # Hourly sweep for unreviewed PRs
+    - cron: '37 */4 * * *'  # Fallback sweep every 4h (event-driven for new PRs)
   workflow_dispatch:
     inputs:
       pr_number:
