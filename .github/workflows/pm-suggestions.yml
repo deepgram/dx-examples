@@ -7,7 +7,7 @@ on:
       - reopened
       - labeled       # Re-process when devrel adds 'approved' to external issues
   schedule:
-    - cron: '47 * * * *'   # Hourly sweep to catch anything missed
+    - cron: '47 */6 * * *'  # Fallback sweep every 6h
   workflow_dispatch:
 
 concurrency:

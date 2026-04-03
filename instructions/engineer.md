@@ -30,13 +30,27 @@ kapa_search() {
 
 ## Step 1: Find the queue issue to build
 
+User-submitted suggestions take priority over bot-queued examples. Check in order:
+
 ```bash
-# Pick oldest issue ready to build (action:generate) or needing research (action:research)
-gh issue list \
+# 1. First: user-submitted suggestions (priority:user label)
+USER_ISSUE=$(gh issue list \
+  --label "queue:new-example,action:generate,priority:user" \
+  --state open \
+  --json number,title,body,labels,comments \
+  --jq 'sort_by(.createdAt) | .[0]')
+
+# 2. Fallback: regular bot-queued examples (no priority:user)
+BOT_ISSUE=$(gh issue list \
   --label "queue:new-example" \
   --state open \
   --json number,title,body,labels,comments \
-  --jq '[.[] | select(.labels | map(.name) | any(. == "action:generate" or . == "action:research"))] | sort_by(.createdAt) | .[0]'
+  --jq '[.[] | select(
+    (.labels | map(.name) | any(. == "action:generate" or . == "action:research")) and
+    (.labels | map(.name) | contains(["priority:user"]) | not)
+  )] | sort_by(.createdAt) | .[0]')
+
+ISSUE=$([ -n "$USER_ISSUE" ] && [ "$USER_ISSUE" != "null" ] && echo "$USER_ISSUE" || echo "$BOT_ISSUE")
 ```
 
 If none found, stop.

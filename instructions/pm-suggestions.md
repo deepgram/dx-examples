@@ -96,68 +96,49 @@ gh issue list --label "status:fix-needed" --state open --json title --jq '.[].ti
 
 ### → New example request (doesn't already exist, technically feasible)
 
+**Do NOT create a separate queue issue.** Label this issue directly and make it
+look like a researched ticket. The Engineer will pick it up from here.
+
 ```bash
-# Label and acknowledge
-gh issue edit {number} --add-label "type:suggestion,queue:new-example"
+# Edit the issue body to add a metadata block at the top
+CURRENT_BODY=$(gh issue view {number} --json body --jq '.body')
 
-gh issue comment {number} --body "Thanks for the suggestion! I've queued this for the team.
-
-The Engineer will research and build a **{description}** example. I'll update this issue when a PR is ready.
-
-If you have more context (preferred language, specific API you want to use, or credentials you have access to), feel free to add it here — it helps the build go faster."
-```
-
-Then create a proper queue issue for the Engineer:
-```bash
-gh issue create \
-  --title "Queue: {clear title derived from the request}" \
-  --label "queue:new-example,action:research" \
-  --body "$(cat <<'EOF'
-## Integration: {Platform/Feature}
+gh issue edit {number} \
+  --body "## Integration: {Platform/Feature}
 
 <!-- metadata
 type: queue
 slug: {derived-slug}
-language: {best guess or "agent decides"}
-products: {stt|tts|agent|intelligence — derived from request}
-priority: {6-10}/10
+language: {best guess}
+products: {stt|tts|agent|intelligence}
+priority: user-request
 -->
 
-### Origin
-Requested in #{number}: {brief quote from original issue}
-
 ### What this should show
-{Your interpretation of what they want — concrete, actionable}
+{Your concrete interpretation of what they want}
 
 ### Credentials likely needed
-{List based on platform, or "only DEEPGRAM_API_KEY"}
-
-### Reference
-{Any links from the original issue, or blank}
+{List based on platform, or \"only DEEPGRAM_API_KEY\"}
 
 ---
-*Queued by PM from #{number} on {date}*
-EOF
+*Original request:*
+
+${CURRENT_BODY}" \
+  --add-label "queue:new-example,action:generate,priority:user" 2>/dev/null
+
+# Warm, enthusiastic comment — they're a real person who cares
+gh issue comment {number} --body "$(cat <<'COMMENT'
+Ooo, we'll get right on that! 🎉
+
+The Engineer will pick this up shortly and build a **{description}** example.
+I'll keep this issue open so you can track progress — we'll close it automatically when the PR merges.
+
+If you have any extra context (preferred language, specific API, or credentials you're already using), drop it here — it helps the build go faster!
+COMMENT
 )"
-
-# Get the new queue issue number
-NEW_ISSUE=$(gh issue list --repo ${{ github.repository }} \
-  --label "queue:new-example" --state open --limit 1 \
-  --json number --jq '.[0].number' 2>/dev/null)
-
-# Close the original suggestion with a friendly message
-# Note: use "closes #{PR_NUMBER}" in the PR body later so GitHub auto-closes
-# the original issue when the example PR merges — completing the full loop
-gh issue comment {number} --body "Thanks for the suggestion! 🎉
-
-I've queued this for the team. The Engineer will build the example and open a PR.
-I'll update this issue and close it when the example is released.
-
-Tracking: #{NEW_ISSUE}"
-
-# Don't close yet — leave it open so the contributor can track progress.
-# The PR body will include 'Closes #{number}' so GitHub closes it on merge.
 ```
+
+User-submitted suggestions get **priority over bot-queued examples** — they go first in the Engineer's queue.
 
 ---
 
