@@ -1,0 +1,21 @@
+{
+  "name": "deepgram-vercel-ai-sdk-agent",
+  "version": "1.0.0",
+  "description": "Voice-enabled AI agent using the Vercel AI SDK with Deepgram STT and TTS tools",
+  "main": "src/agent.js",
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "start": "node src/agent.js",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@ai-sdk/deepgram": "2.0.27",
+    "@ai-sdk/openai": "3.0.50",
+    "ai": "6.0.146",
+    "dotenv": "16.6.1",
+    "zod": "4.3.6"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
