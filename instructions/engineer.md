@@ -346,9 +346,135 @@ if missing:
 
 ---
 
-## Step 5.5: Run tests before opening the PR
+## Supply-chain security — required for every example
 
-All runtimes (Node.js, Python, Go) and credentials are available in the environment.
+Examples are public code that users clone and run directly. Follow these rules for every
+new example — they protect users from compromised or malicious dependencies.
+
+### Node.js (pnpm / bun / deno)
+
+**`package.json`** — exact versions only, no `^` or `~`; pin the package manager itself:
+```json
+{
+  "packageManager": "pnpm@9.6.0",
+  "dependencies": {
+    "@deepgram/sdk": "3.9.0",
+    "express": "4.21.2"
+  }
+}
+```
+
+**`.npmrc`** in the example root — prevents accidental range saves:
+```
+save-exact=true
+```
+
+Commit `pnpm-lock.yaml` (or `bun.lockb` / `deno.lock`). Run before pushing:
+```bash
+pnpm audit --audit-level=high   # or: bun audit / deno audit
+```
+
+### Python
+
+**`requirements.txt`** — `==` pins only, never `>=` or `~=`:
+```
+deepgram-sdk==3.10.0
+fastapi==0.115.6
+uvicorn==0.34.0
+```
+
+For examples with more than 3 dependencies, use **pip-tools hash pinning**:
+```bash
+# requirements.in — unpinned names only
+deepgram-sdk
+fastapi
+uvicorn
+
+# Generate requirements.txt with per-package sha256 hashes:
+pip install pip-tools
+pip-compile --generate-hashes requirements.in
+
+# Install with hash verification (use this command in the README too):
+pip install --require-hashes -r requirements.txt
+```
+
+Run before pushing:
+```bash
+pip install pip-audit
+pip-audit -r requirements.txt
+```
+
+### Go
+
+Commit both `go.mod` and `go.sum`. `go.sum` contains cryptographic checksums for every
+downloaded module — Go's built-in integrity guarantee.
+
+```bash
+go mod tidy      # prune unused deps, update go.sum
+go mod verify    # re-verify local cache against go.sum checksums
+```
+
+### Java
+
+**Maven `pom.xml`** — exact versions only, never version ranges:
+```xml
+<!-- ✅ exact -->
+<version>3.4.0</version>
+
+<!-- ❌ never — a range silently pulls in newer/malicious versions -->
+<version>[3.0,4.0)</version>
+```
+
+**Gradle** — exact versions, and commit generated verification metadata:
+```groovy
+// build.gradle — exact version, no dynamic selectors
+implementation 'com.deepgram:deepgram-java-sdk:3.4.0'
+```
+```bash
+# Generates gradle/verification-metadata.xml — commit this file:
+./gradlew --write-verification-metadata sha256
+```
+
+### Rust
+
+Commit `Cargo.lock`. Use the `=` prefix for exact SemVer pinning in `Cargo.toml`:
+```toml
+[dependencies]
+deepgram = "=0.6.0"   # = means exact; without it Cargo allows patch-level drift
+```
+
+Run before pushing:
+```bash
+cargo install cargo-audit
+cargo audit
+```
+
+### .NET
+
+Enable the NuGet lock file — add to every `*.csproj`:
+```xml
+<PropertyGroup>
+  <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+</PropertyGroup>
+```
+
+Exact versions in all package references — no floating wildcards:
+```xml
+<PackageReference Include="Deepgram" Version="3.4.0" />
+```
+
+Commit `packages.lock.json`. Run before pushing:
+```bash
+dotnet list package --vulnerable
+```
+
+---
+
+## Step 5.5: Audit, install, test — fix until passing
+
+All runtimes and credentials are available. **Never run install before auditing.**
+Iterate through the audit → install → test cycle, fixing issues each round, up to **3 attempts total**.
+Only proceed to Step 6 when both audit and tests are clean.
 
 ```bash
 cd "$EXAMPLE_DIR"
@@ -366,30 +492,95 @@ fi
 
 TEST_OUTPUT=""
 TEST_PASSED=false
+ATTEMPT=0
+MAX_ATTEMPTS=3
 
 if [ -n "$MISSING" ]; then
   TEST_OUTPUT="⏳ Missing credentials: $MISSING — cannot verify tests in CI"
-elif [ -f "package.json" ]; then
-  npm install --prefer-offline -q 2>/dev/null || npm install -q
-  TEST_OUTPUT=$(npm test 2>&1) && TEST_PASSED=true
-elif [ -f "requirements.txt" ]; then
-  pip install -q -r requirements.txt 2>/dev/null
-  pip install -q pytest 2>/dev/null
-  if find tests/ -name "test_*.py" 2>/dev/null | grep -q .; then
-    TEST_OUTPUT=$(python -m pytest tests/ -v 2>&1) && TEST_PASSED=true
-  else
-    TEST_OUTPUT=$(python "$(ls tests/*.py | head -1)" 2>&1) && TEST_PASSED=true
-  fi
-elif [ -f "go.mod" ]; then
-  go mod download 2>/dev/null
-  TEST_OUTPUT=$(go test ./... -v 2>&1) && TEST_PASSED=true
+else
+  while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+    ATTEMPT=$((ATTEMPT + 1))
+    echo "── Attempt $ATTEMPT/$MAX_ATTEMPTS ──"
+
+    # ── 1. AUDIT — always before install ───────────────────────────────────
+    AUDIT_OK=true
+    if [ -f "pnpm-lock.yaml" ]; then
+      pnpm audit --audit-level=high 2>&1 || AUDIT_OK=false
+    elif [ -f "bun.lockb" ] || [ -f "bun.lock" ]; then
+      bun audit 2>&1 || AUDIT_OK=false
+    elif [ -f "requirements.txt" ]; then
+      pip-audit -r requirements.txt 2>&1 || AUDIT_OK=false
+    elif [ -f "Cargo.toml" ]; then
+      cargo audit 2>&1 || AUDIT_OK=false
+    elif [ -f "go.mod" ]; then
+      go mod verify 2>&1 || AUDIT_OK=false
+    fi
+
+    if [ "$AUDIT_OK" = "false" ]; then
+      echo "⚠ Audit failed — fixing vulnerable dependencies before continuing"
+      # Fix: identify and update the vulnerable packages to safe versions,
+      # regenerate the lockfile, then loop back to re-audit.
+      if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+        TEST_OUTPUT="Audit still failing after $MAX_ATTEMPTS attempts — fix vulnerable deps"
+        break
+      fi
+      continue
+    fi
+
+    # ── 2. INSTALL — only after audit passes ───────────────────────────────
+    if [ -f "pnpm-lock.yaml" ]; then
+      pnpm install --frozen-lockfile
+    elif [ -f "bun.lockb" ] || [ -f "bun.lock" ]; then
+      bun install --frozen-lockfile
+    elif [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
+      : # deno fetches on demand, no separate install step
+    elif [ -f "requirements.txt" ]; then
+      pip install -q -r requirements.txt
+      pip install -q pytest
+    elif [ -f "go.mod" ]; then
+      go mod download
+    elif [ -f "Cargo.toml" ]; then
+      : # cargo test fetches on demand
+    else
+      echo "ERROR: No supported lockfile found. Node.js examples must use pnpm, bun, or deno — not npm or yarn."
+      break
+    fi
+
+    # ── 3. TEST ────────────────────────────────────────────────────────────
+    if [ -f "pnpm-lock.yaml" ]; then
+      TEST_OUTPUT=$(pnpm test 2>&1) && TEST_PASSED=true && break
+    elif [ -f "bun.lockb" ] || [ -f "bun.lock" ]; then
+      TEST_OUTPUT=$(bun test 2>&1) && TEST_PASSED=true && break
+    elif [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
+      TEST_OUTPUT=$(deno test 2>&1) && TEST_PASSED=true && break
+    elif [ -f "requirements.txt" ]; then
+      if find tests/ -name "test_*.py" 2>/dev/null | grep -q .; then
+        TEST_OUTPUT=$(python -m pytest tests/ -v 2>&1) && TEST_PASSED=true && break
+      else
+        TEST_OUTPUT=$(python "$(ls tests/*.py | head -1)" 2>&1) && TEST_PASSED=true && break
+      fi
+    elif [ -f "go.mod" ]; then
+      TEST_OUTPUT=$(go test ./... -v 2>&1) && TEST_PASSED=true && break
+    elif [ -f "Cargo.toml" ]; then
+      TEST_OUTPUT=$(cargo test 2>&1) && TEST_PASSED=true && break
+    fi
+
+    echo "⚠ Tests failed — fixing code issues before re-running"
+    [ $ATTEMPT -ge $MAX_ATTEMPTS ] && { TEST_OUTPUT="Tests still failing after $MAX_ATTEMPTS attempts"; break; }
+    # Fix: read TEST_OUTPUT, identify the failing assertion or error, edit src/ or tests/, then loop.
+  done
 fi
 
 cd -
 ```
 
-If tests fail AND credentials are present: make one fix attempt, then re-run.
-Include `$TEST_OUTPUT` in the PR body under a "## Tests" section so the reviewer sees real results.
+**Fix cycle rules:**
+- Audit failure → update the specific vulnerable package to a safe version, regenerate the lockfile, re-audit. Do not update unrelated packages.
+- Test failure → read the full `TEST_OUTPUT`, edit the minimal code needed to fix the assertion, re-test.
+- After 3 failed attempts → stop and document the blocker in the PR; do not open a PR with a clean test status when tests actually failed.
+- Never downgrade the audit level to make a failure disappear.
+
+Include `$TEST_OUTPUT` in the PR body under a "## Tests" section.
 Do NOT include any line from the output that contains a credential value.
 
 ## Step 6: Commit and open PR
@@ -467,3 +658,4 @@ gh issue close {issue_number} --comment "Built in ${PR_URL}"
 - The integration must be REAL — platform SDK imported and called, not mocked
 - One example per PR
 - Never modify `.github/` files
+- **Node.js examples must use pnpm, bun, or deno — never npm or yarn.** Default to pnpm. Use bun when the example targets Bun's runtime specifically. Use deno when the example targets Deno. Every Node.js example must ship with the appropriate lockfile (`pnpm-lock.yaml`, `bun.lockb`, or `deno.lock`).

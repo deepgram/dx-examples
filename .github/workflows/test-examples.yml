@@ -141,9 +141,18 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || '' }}
           fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Run Node.js tests
         id: test
         continue-on-error: true
@@ -184,8 +193,22 @@ jobs:
               MISSING="$MISSING $dir"
               popd > /dev/null; continue
             fi
-            npm install --prefer-offline -q 2>/dev/null || npm install -q
-            npm test && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            # Detect package manager from lockfile — pnpm/bun/deno required for new examples
+            if [ -f "pnpm-lock.yaml" ]; then
+              pnpm audit --audit-level=high || { echo "✗ AUDIT-FAILED"; FAILED="$FAILED $dir"; popd > /dev/null; continue; }
+              pnpm install --frozen-lockfile
+              pnpm test && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            elif [ -f "bun.lockb" ] || [ -f "bun.lock" ]; then
+              bun install --frozen-lockfile
+              bun test && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            elif [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
+              deno test && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            else
+              # Legacy npm fallback for examples predating the pnpm/bun/deno rule
+              npm audit --audit-level=high || { echo "✗ AUDIT-FAILED"; FAILED="$FAILED $dir"; popd > /dev/null; continue; }
+              npm install --prefer-offline -q 2>/dev/null || npm install -q
+              npm test && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
+            fi
             popd > /dev/null
           done
           echo "failed=$FAILED"   >> $GITHUB_OUTPUT
@@ -273,6 +296,17 @@ jobs:
           echo "missing=$MISSING" >> $GITHUB_OUTPUT
           [ -n "$FAILED" ] && exit 1 || exit 0
 
+      - name: Audit Python dependencies
+        run: |
+          pip install -q pip-audit
+          FAILED=""
+          for dir in ${{ needs.detect.outputs.python_examples }}; do
+            [ -f "${dir}/requirements.txt" ] || continue
+            echo "── audit: $dir ──"
+            pip-audit -r "${dir}/requirements.txt" || FAILED="$FAILED $dir"
+          done
+          [ -n "$FAILED" ] && { echo "✗ pip-audit failed for:$FAILED"; exit 1; } || true
+
       - name: Comment missing credentials
         if: steps.test.outputs.missing != '' && github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -322,6 +356,7 @@ jobs:
               MISSING="$MISSING $dir"; popd > /dev/null; continue
             fi
             go mod download
+            go mod verify
             go test ./... -v -timeout 60s && echo "✓ PASSED" || { echo "✗ FAILED"; FAILED="$FAILED $dir"; }
             popd > /dev/null
           done
@@ -416,6 +451,17 @@ jobs:
           echo "failed=$FAILED" >> $GITHUB_OUTPUT
           [ -n "$FAILED" ] && exit 1 || exit 0
 
+      - name: Audit Rust dependencies
+        run: |
+          cargo install cargo-audit --quiet
+          FAILED=""
+          for dir in ${{ needs.detect.outputs.rust_examples }}; do
+            [ -f "${dir}/Cargo.toml" ] || continue
+            echo "── audit: $dir ──"
+            cargo audit --file "${dir}/Cargo.lock" || FAILED="$FAILED $dir"
+          done
+          [ -n "$FAILED" ] && { echo "✗ cargo-audit failed for:$FAILED"; exit 1; } || true
+
   # ── .NET ─────────────────────────────────────────────────────────────────────
   test-dotnet:
     needs: detect
@@ -457,6 +503,15 @@ jobs:
           done
           echo "failed=$FAILED" >> $GITHUB_OUTPUT
           [ -n "$FAILED" ] && exit 1 || exit 0
+
+      - name: Audit .NET dependencies
+        run: |
+          FAILED=""
+          for dir in ${{ needs.detect.outputs.dotnet_examples }}; do
+            echo "── audit: $dir ──"
+            dotnet list "$dir" package --vulnerable || FAILED="$FAILED $dir"
+          done
+          [ -n "$FAILED" ] && { echo "✗ dotnet vulnerable packages found in:$FAILED"; exit 1; } || true
 
   # ── CLI (Deepgram CLI — installed via install.sh) ────────────────────────────
   test-cli:
