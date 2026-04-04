@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "description": "Transcribe audio from a URL using the Deepgram JavaScript SDK",
   "main": "src/index.js",
+  "packageManager": "pnpm@10.30.3",
   "scripts": {
     "start": "node src/index.js",
     "test": "node tests/test.js"
   },
   "dependencies": {
-    "@deepgram/sdk": "^5.0.0",
-    "dotenv": "^16.4.0"
+    "@deepgram/sdk": "5.0.0",
+    "dotenv": "16.6.1"
   },
   "engines": {
     "node": ">=18"

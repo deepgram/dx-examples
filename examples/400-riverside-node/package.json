@@ -3,14 +3,15 @@
   "version": "1.0.0",
   "description": "Receive Riverside webhook events, download per-track audio, transcribe each track with Deepgram, and merge into a speaker-labelled transcript",
   "main": "src/index.js",
+  "packageManager": "pnpm@10.30.3",
   "scripts": {
     "start": "node src/index.js",
     "test": "node tests/test.js"
   },
   "dependencies": {
     "@deepgram/sdk": "5.0.0",
-    "dotenv": "^16.4.0",
-    "express": "^4.21.0"
+    "dotenv": "16.6.1",
+    "express": "4.22.1"
   },
   "engines": {
     "node": ">=18"

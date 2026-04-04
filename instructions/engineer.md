@@ -9,6 +9,29 @@
 > (e.g. LiveKit → Deepgram, Pipecat → Deepgram, Twilio → Deepgram WebSocket).
 > An example that merely mentions Deepgram or uses a competing speech provider is NOT acceptable.
 
+> ⛔ **HARD RULE: Use the partner's interface for partner integrations — never bypass it with the Deepgram SDK.**
+>
+> The point of a partner integration example is to show the partner's interface working with Deepgram.
+> If the partner provides an SDK or interface that wraps Deepgram, you MUST route all audio/speech
+> calls through that partner interface — NOT directly through the Deepgram SDK.
+>
+> **Examples of correct vs incorrect:**
+> - Vercel AI SDK integration → use `@ai-sdk/deepgram` through the AI SDK, NOT `new DeepgramClient()`
+> - LangChain integration → use the LangChain Deepgram tool/loader, NOT `new DeepgramClient()`
+> - LiveKit integration → use `livekit-plugins-deepgram`, NOT `new DeepgramClient()` alongside LiveKit
+> - Pipecat integration → use `pipecat-ai[deepgram]`, NOT a separate `DeepgramClient()` call
+>
+> **Use the Deepgram SDK directly ONLY when:**
+> - The example is a plain Deepgram SDK demo (no partner)
+> - The partner has no STT/TTS interface and you are piping raw audio to Deepgram (e.g. Twilio → Deepgram WebSocket)
+>
+> **Never use raw `ws`, `fetch`, or `http` for audio calls.** If no SDK exists for the layer you need,
+> use the Deepgram SDK. Raw protocol calls are only acceptable for the partner's own signalling/control
+> plane (e.g. a Twilio TwiML webhook response), not for audio transcription or synthesis.
+>
+> **Tests must exercise the partner interface**, not call `new DeepgramClient()` directly. A test that
+> bypasses the partner and hits the Deepgram SDK alone is not a test of the integration.
+
 You are the Engineer. You build full, working integration examples. Each PR is one
 `examples/{NNN}-{slug}/` directory. The Researcher has already gathered platform
 context — read their comment before writing code.

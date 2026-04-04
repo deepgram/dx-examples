@@ -3,14 +3,15 @@
   "version": "1.0.0",
   "description": "Transcribe audio and generate speech using the Vercel AI SDK with the Deepgram provider",
   "main": "src/index.js",
+  "packageManager": "pnpm@10.30.3",
   "scripts": {
     "start": "node src/index.js",
     "test": "node tests/test.js"
   },
   "dependencies": {
-    "@ai-sdk/deepgram": "^2.0.0",
-    "ai": "^6.0.0",
-    "dotenv": "^16.4.0"
+    "@ai-sdk/deepgram": "2.0.27",
+    "ai": "6.0.146",
+    "dotenv": "16.6.1"
   },
   "engines": {
     "node": ">=18"
