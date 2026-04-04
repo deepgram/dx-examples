@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# SDK v5 Python: DeepgramClient reads DEEPGRAM_API_KEY from env automatically.
+# SDK v6 Python: DeepgramClient reads DEEPGRAM_API_KEY from env automatically.
 from deepgram import DeepgramClient
 
 # LlamaIndex core: Document is the atomic unit of data, BaseReader defines
@@ -80,6 +80,7 @@ class DeepgramAudioReader(BaseReader):
             sentiment=self.sentiment,
             detect_entities=self.detect_entities,
             language=self.language,
+            tag="deepgram-examples",
         )
 
         # response.results.channels[0].alternatives[0].transcript

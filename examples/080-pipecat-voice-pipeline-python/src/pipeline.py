@@ -59,6 +59,7 @@ async def run_local_pipeline():
     # not the pre-recorded API — so transcription is real-time, word by word.
     stt = DeepgramSTTService(
         api_key=os.environ["DEEPGRAM_API_KEY"],
+        tag="deepgram-examples",
         # Settings are exposed as a nested dataclass. Override only what you
         # need — Pipecat's defaults (interim_results, punctuate, etc.) are
         # already tuned for conversational use.
@@ -182,7 +183,7 @@ async def run_daily_pipeline():
             room = await resp.json()
             room_url = room["url"]
 
-    stt = DeepgramSTTService(api_key=os.environ["DEEPGRAM_API_KEY"])
+    stt = DeepgramSTTService(api_key=os.environ["DEEPGRAM_API_KEY"], tag="deepgram-examples")
 
     tts = DeepgramTTSService(
         api_key=os.environ["DEEPGRAM_API_KEY"],

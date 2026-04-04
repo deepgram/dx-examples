@@ -106,8 +106,16 @@ exit 0
 **If credentials are present, run the tests:**
 
 ```bash
-# Node.js
-[ -f package.json ] && npm install --prefer-offline -q 2>/dev/null || npm install -q && npm test 2>&1
+# Node.js — detect package manager from lockfile
+if [ -f "pnpm-lock.yaml" ]; then
+  pnpm audit --audit-level=high && pnpm install --frozen-lockfile && pnpm test 2>&1
+elif [ -f "bun.lockb" ] || [ -f "bun.lock" ]; then
+  bun install --frozen-lockfile && bun test 2>&1
+elif [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
+  deno test 2>&1
+else
+  npm audit --audit-level=high && npm install --prefer-offline -q 2>/dev/null || npm install -q && npm test 2>&1
+fi
 
 # Python
 [ -f requirements.txt ] && pip install -q -r requirements.txt && python -m pytest tests/ -v 2>&1
@@ -130,8 +138,14 @@ Read `src/` to verify:
 2. A real API call to the platform is made — not mocked, not hardcoded
 3. `.env.example` lists real platform credentials (not only `DEEPGRAM_API_KEY`)
 4. The test makes a real call (exit 2 if credentials missing, not a fake pass)
+5. **BYPASS CHECK**: If the partner provides an audio/speech interface, Deepgram calls go THROUGH it — not around it with a raw `DeepgramClient()`.
+   - ❌ FAIL: A Vercel AI SDK example that imports `DeepgramClient` and calls `transcribeUrl()` directly
+   - ❌ FAIL: A LangChain example that skips the tool and calls `DeepgramClient` inside the test
+   - ❌ FAIL: A LiveKit example that creates a `DeepgramClient` alongside the plugin instead of through it
+   - ✅ PASS: Audio calls flow through the partner's interface; `DeepgramClient` only appears if the partner has no Deepgram interface and audio is being piped raw (e.g. Twilio media streams)
+6. **NO RAW PROTOCOL CHECK**: No `new WebSocket()`, `ws(url)`, or `fetch()` calls for audio transcription or synthesis. The Deepgram SDK must be used for all Deepgram API contact unless the partner interface fully wraps it.
 
-If any of these fail, add `status:fix-needed` and post an `❌ Integration check failed` comment.
+If any of these fail, add `status:fix-needed` and post an `❌ Integration check failed` comment specifying which check failed.
 
 ---
 

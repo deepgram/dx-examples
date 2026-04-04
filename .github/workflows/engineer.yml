@@ -41,9 +41,21 @@ jobs:
           git config user.name "examples-bot"
           git config user.email "noreply@deepgram.com"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
       - uses: actions/setup-python@v5
         with:

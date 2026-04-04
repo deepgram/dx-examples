@@ -4,17 +4,18 @@
   "description": "Cloudflare Worker that transcribes audio URLs at the edge using Deepgram nova-3",
   "main": "src/index.js",
   "type": "module",
+  "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node tests/test.js"
   },
   "dependencies": {
-    "@deepgram/sdk": "^5.0.0"
+    "@deepgram/sdk": "5.0.0"
   },
   "devDependencies": {
-    "dotenv": "^16.4.0",
-    "wrangler": "^3.0.0"
+    "dotenv": "16.6.1",
+    "wrangler": "4.80.0"
   },
   "engines": {
     "node": ">=18"

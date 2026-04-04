@@ -3,16 +3,17 @@
   "version": "1.0.0",
   "description": "Connect Twilio Voice calls to Deepgram's Voice Agent API for bidirectional conversational AI over the phone",
   "main": "src/index.js",
+  "packageManager": "pnpm@10.30.3",
   "scripts": {
     "start": "node src/index.js",
     "test": "node tests/test.js"
   },
   "dependencies": {
-    "dotenv": "^16.4.0",
-    "express": "^4.21.0",
-    "express-ws": "^5.0.2",
-    "twilio": "^5.4.0",
-    "ws": "^8.18.0"
+    "dotenv": "16.6.1",
+    "express": "4.22.1",
+    "express-ws": "5.0.2",
+    "twilio": "5.13.1",
+    "ws": "8.20.0"
   },
   "engines": {
     "node": ">=18"

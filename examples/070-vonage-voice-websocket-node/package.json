@@ -1,6 +1,7 @@
 {
   "name": "deepgram-vonage-voice-websocket",
   "version": "1.0.0",
+  "packageManager": "pnpm@10.30.3",
   "description": "Transcribe Vonage phone calls in real-time using Deepgram live STT",
   "main": "src/index.js",
   "scripts": {
@@ -8,10 +9,10 @@
     "test": "node tests/test.js"
   },
   "dependencies": {
-    "@deepgram/sdk": "^5.0.0",
-    "dotenv": "^16.4.0",
-    "express": "^4.21.0",
-    "express-ws": "^5.0.2"
+    "@deepgram/sdk": "5.0.0",
+    "dotenv": "16.6.1",
+    "express": "4.22.1",
+    "express-ws": "5.0.2"
   },
   "engines": {
     "node": ">=18"

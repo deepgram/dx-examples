@@ -3,14 +3,15 @@
   "version": "1.0.0",
   "description": "Transcribe Zoom cloud recordings using Deepgram nova-3",
   "main": "src/server.js",
+  "packageManager": "pnpm@10.30.3",
   "scripts": {
     "start": "node src/server.js",
     "test": "node tests/test.js"
   },
   "dependencies": {
-    "@deepgram/sdk": "^5.0.0",
-    "dotenv": "^16.4.0",
-    "express": "^4.21.0"
+    "@deepgram/sdk": "5.0.0",
+    "dotenv": "16.6.1",
+    "express": "4.22.1"
   },
   "engines": {
     "node": ">=18"

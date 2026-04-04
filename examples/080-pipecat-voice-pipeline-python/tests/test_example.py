@@ -74,8 +74,8 @@ def test_pipeline_source_configures_deepgram():
         "pipeline.py should reference Deepgram STT configuration"
     assert "aura-2" in src, \
         "pipeline.py must configure an aura-2 TTS voice"
-    assert "tag" not in src or "deepgram-examples" not in src or True, \
-        "Pipecat Deepgram plugin handles tagging internally"
+    assert 'tag="deepgram-examples"' in src, \
+        "DeepgramSTTService must include tag='deepgram-examples'"
 
     print("Pipeline source correctly configures Deepgram STT and TTS")
 

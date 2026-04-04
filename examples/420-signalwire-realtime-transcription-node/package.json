@@ -1,0 +1,21 @@
+{
+  "name": "deepgram-signalwire-realtime-transcription",
+  "version": "1.0.0",
+  "description": "Transcribe SignalWire phone calls in real-time using Deepgram live STT",
+  "main": "src/index.js",
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "5.0.0",
+    "@signalwire/realtime-api": "4.2.1",
+    "dotenv": "16.6.1",
+    "express": "4.22.1",
+    "express-ws": "5.0.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

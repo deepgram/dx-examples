@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@deepgram/sdk": "5.0.0",
-    "nuxt": "^3.17.0"
+    "nuxt": "3.21.2"
   },
   "devDependencies": {
-    "typescript": "^5.8.0"
+    "typescript": "5.9.3"
   }
 }

@@ -1,3 +1,6 @@
-crewai[tools]>=1.12.0
-deepgram-sdk==v6.1.1
-python-dotenv>=1.0.0
+crewai[tools]==1.13.0
+deepgram-sdk==6.1.1
+python-dotenv==1.1.1
+# NOTE: crewai-tools==1.13.0 pins requests~=2.32.5 (CVE-2026-25645).
+# This cannot be overridden without breaking crewai-tools.
+# Track: https://github.com/crewAIInc/crewAI-tools/issues for a fix.

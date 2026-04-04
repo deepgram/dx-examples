@@ -179,7 +179,7 @@ async fn stop_transcription(
 }
 
 fn main() {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     tauri::Builder::default()
         .manage(AppState {
