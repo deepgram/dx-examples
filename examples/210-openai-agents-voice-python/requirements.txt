@@ -1,4 +1,4 @@
 openai-agents[voice]>=0.13.0
-deepgram-sdk>=4.0.0
+deepgram-sdk==v6.1.1
 python-dotenv>=1.0.0
 numpy>=1.24.0
