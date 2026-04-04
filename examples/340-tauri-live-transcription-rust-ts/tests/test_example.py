@@ -75,8 +75,8 @@ def test_cargo_toml_pins_deepgram():
 
     assert "deepgram" in cargo_toml, \
         "Cargo.toml must declare the deepgram crate as a dependency"
-    assert "0.9.1" in cargo_toml, \
-        "Cargo.toml should pin deepgram at version 0.9.1"
+    assert "0.9.2" in cargo_toml, \
+        "Cargo.toml should pin deepgram at version 0.9.2"
     assert "tauri" in cargo_toml, \
         "Cargo.toml must declare the tauri crate as a dependency"
 
