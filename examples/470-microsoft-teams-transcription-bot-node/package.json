@@ -1,0 +1,22 @@
+{
+  "name": "deepgram-teams-transcription-bot",
+  "version": "1.0.0",
+  "description": "Microsoft Teams bot that transcribes meetings in real-time using Deepgram STT",
+  "main": "src/index.js",
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node tests/test.js"
+  },
+  "dependencies": {
+    "@azure/identity": "4.13.1",
+    "@deepgram/sdk": "5.0.0",
+    "@microsoft/microsoft-graph-client": "3.0.7",
+    "botbuilder": "4.23.3",
+    "dotenv": "16.6.1",
+    "express": "4.22.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
