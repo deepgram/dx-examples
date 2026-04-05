@@ -1,0 +1,3 @@
+deepgram-sdk==6.1.1
+haystack-ai==2.27.0
+python-dotenv==1.2.2
