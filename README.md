@@ -45,6 +45,12 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [350](examples/350-asterisk-freeswitch-deepgram-stt-python/) | Asterisk / FreeSWITCH PBX to Deepgram Streaming STT | Python | Asterisk/FreeSWITCH |
 | [360](examples/360-kotlin-android-live-transcription/) | Kotlin Android Live Transcription | Kotlin | Jetpack Compose |
 | [370](examples/370-swift-ios-live-transcription/) | Swift iOS Live Transcription | Swift | SwiftUI |
+| [400](examples/400-riverside-node/) | Riverside.fm Recording Transcription | Node.js | Riverside |
+| [420](examples/420-signalwire-realtime-transcription-node/) | SignalWire Real-Time Call Transcription with Deepgram STT | Node.js | SignalWire |
+| [430](examples/430-telnyx-texml-stream-node/) | Telnyx TeXML Stream to Deepgram Real-Time Transcription | Node.js | Telnyx |
+| [440](examples/440-plivo-media-streams-node/) | Plivo Audio Streaming — Real-Time Call Transcription | Node.js | Plivo |
+| [450](examples/450-jitsi-deepgram-stt-node/) | Jitsi Meet Real-Time Transcription with Deepgram STT | Node.js | Jitsi |
+| [460](examples/460-webex-recording-transcription-node/) | Webex Recording Transcription with Deepgram | Node.js | Webex |
 <!-- examples-table-end -->
 
 ## CI / testing
