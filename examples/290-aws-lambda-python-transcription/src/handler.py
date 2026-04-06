@@ -50,7 +50,7 @@ def handler(event, context):
             # sent directly through API Gateway (up to ~6 MB after encoding).
             audio_bytes = base64.b64decode(body["audio"])
             response = client.listen.v1.media.transcribe_file(
-                audio_bytes,
+                request=audio_bytes,
                 model="nova-3",
                 smart_format=True,
                 tag="deepgram-examples",
