@@ -16,6 +16,7 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [040](examples/040-langchain-stt-tool-python/) | LangChain STT Tool — Transcribe Audio in AI Pipelines | Python | LangChain |
 | [050](examples/050-vercel-ai-sdk-node/) | Vercel AI SDK — Transcribe Audio and Generate Speech with Deepgram | Node.js | Vercel AI SDK |
 | [051](examples/051-nextjs-vercel-ai-sdk-streaming/) | Next.js Streaming STT + TTS with Deepgram via the Vercel AI SDK | Node.js | Vercel AI SDK |
+| [052](examples/052-vercel-ai-sdk-agent-node/) | Vercel AI SDK Agent with Deepgram Voice Tools | Node.js | Vercel AI SDK |
 | [060](examples/060-discord-bot-node/) | Discord Bot — Transcribe Audio Attachments with Deepgram | Node.js | Discord |
 | [070](examples/070-vonage-voice-websocket-node/) | Vonage Voice API — Real-Time Call Transcription | Node.js | Vonage |
 | [080](examples/080-pipecat-voice-pipeline-python/) | Pipecat Voice Pipeline — Conversational Bot with Deepgram STT & TTS | Python | Pipecat |
@@ -51,6 +52,7 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [440](examples/440-plivo-media-streams-node/) | Plivo Audio Streaming — Real-Time Call Transcription | Node.js | Plivo |
 | [450](examples/450-jitsi-deepgram-stt-node/) | Jitsi Meet Real-Time Transcription with Deepgram STT | Node.js | Jitsi |
 | [460](examples/460-webex-recording-transcription-node/) | Webex Recording Transcription with Deepgram | Node.js | Webex |
+| [480](examples/480-obs-captioning-plugin-c/) | OBS Studio Live Captioning Plugin (C + Deepgram STT) | C | OBS Studio |
 <!-- examples-table-end -->
 
 ## CI / testing
