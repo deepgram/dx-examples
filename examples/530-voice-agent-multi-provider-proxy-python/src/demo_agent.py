@@ -15,7 +15,6 @@ routes to whichever provider LLM_PROVIDER is set to.
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 
@@ -23,19 +22,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import websockets
-import websockets.sync.client
-
-DG_AGENT_URL = "wss://agent.deepgram.com/v1/agent/converse"
+from deepgram import DeepgramClient
+from deepgram.agent.v1.types.agent_v1settings import AgentV1Settings
 
 PROXY_URL = os.environ.get("PROXY_URL", "http://localhost:8080/v1/chat/completions")
 
 
-def build_settings(proxy_url: str = PROXY_URL) -> dict:
+def build_settings(proxy_url: str = PROXY_URL) -> AgentV1Settings:
     """Build the Voice Agent Settings message with the proxy as the LLM backend."""
-    return {
-        "type": "Settings",
-        "audio": {
+    return AgentV1Settings(
+        type="Settings",
+        tags=["deepgram-examples"],
+        audio={
             "input": {
                 "encoding": "linear16",
                 "sample_rate": 16000,
@@ -45,7 +43,7 @@ def build_settings(proxy_url: str = PROXY_URL) -> dict:
                 "sample_rate": 16000,
             },
         },
-        "agent": {
+        agent={
             "listen": {
                 "provider": {
                     "type": "deepgram",
@@ -74,7 +72,7 @@ def build_settings(proxy_url: str = PROXY_URL) -> dict:
             },
             "greeting": "Hello! I'm your voice assistant. How can I help?",
         },
-    }
+    )
 
 
 def run_agent(proxy_url: str = PROXY_URL) -> None:
@@ -89,47 +87,42 @@ def run_agent(proxy_url: str = PROXY_URL) -> None:
     print(f"Connecting to Deepgram Voice Agent…")
     print(f"  LLM proxy: {proxy_url}")
 
-    ws = websockets.sync.client.connect(
-        DG_AGENT_URL,
-        additional_headers={"Authorization": f"Token {api_key}"},
-    )
+    client = DeepgramClient(api_key=api_key)
 
-    ws.send(json.dumps(settings))
-    print("Settings sent, waiting for agent…")
+    with client.agent.v1.connect() as ws:
+        ws.send_settings(settings)
+        print("Settings sent, waiting for agent…")
 
-    try:
-        while True:
-            raw = ws.recv()
-            if isinstance(raw, bytes):
-                print(f"  [audio] {len(raw)} bytes")
-                continue
+        try:
+            while True:
+                msg = ws.recv()
 
-            msg = json.loads(raw)
-            msg_type = msg.get("type", "")
+                if isinstance(msg, bytes):
+                    print(f"  [audio] {len(msg)} bytes")
+                    continue
 
-            if msg_type == "Welcome":
-                print(f"  Connected — request_id: {msg.get('request_id')}")
-            elif msg_type == "SettingsApplied":
-                print("  Settings applied — agent ready")
-                print("  (Send audio to interact, or Ctrl+C to stop)")
-            elif msg_type == "ConversationText":
-                print(f"  [{msg.get('role')}] {msg.get('content')}")
-            elif msg_type == "AgentStartedSpeaking":
-                latency = msg.get("total_latency", 0)
-                print(f"  Agent speaking (latency: {latency:.2f}s)")
-            elif msg_type == "AgentAudioDone":
-                print("  Agent audio done")
-            elif msg_type == "Error":
-                print(f"  ERROR: {msg.get('description')} ({msg.get('code')})")
-            elif msg_type == "Warning":
-                print(f"  WARNING: {msg.get('description')}")
-            else:
-                print(f"  [{msg_type}] {json.dumps(msg)[:120]}")
+                msg_type = getattr(msg, "type", "")
 
-    except KeyboardInterrupt:
-        print("\nDisconnecting…")
-    finally:
-        ws.close()
+                if msg_type == "Welcome":
+                    print(f"  Connected — request_id: {msg.request_id}")
+                elif msg_type == "SettingsApplied":
+                    print("  Settings applied — agent ready")
+                    print("  (Send audio to interact, or Ctrl+C to stop)")
+                elif msg_type == "ConversationText":
+                    print(f"  [{msg.role}] {msg.content}")
+                elif msg_type == "AgentStartedSpeaking":
+                    print(f"  Agent speaking (latency: {msg.total_latency:.2f}s)")
+                elif msg_type == "AgentAudioDone":
+                    print("  Agent audio done")
+                elif msg_type == "Error":
+                    print(f"  ERROR: {msg.description} ({msg.code})")
+                elif msg_type == "Warning":
+                    print(f"  WARNING: {msg.description}")
+                else:
+                    print(f"  [{msg_type}] {str(msg)[:120]}")
+
+        except KeyboardInterrupt:
+            print("\nDisconnecting…")
 
 
 if __name__ == "__main__":

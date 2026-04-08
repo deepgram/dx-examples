@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from pathlib import Path
@@ -128,19 +127,25 @@ def test_provider_header_override():
 
 def test_voice_agent_settings_builder():
     """Verify build_settings() produces a valid Voice Agent Settings message."""
+    from deepgram.agent.v1.types.agent_v1settings import AgentV1Settings
+
     from demo_agent import build_settings
 
     settings = build_settings("http://localhost:8080/v1/chat/completions")
 
-    assert settings["type"] == "Settings"
-    assert settings["audio"]["input"]["encoding"] == "linear16"
-    assert settings["audio"]["input"]["sample_rate"] == 16000
-    assert settings["agent"]["listen"]["provider"]["type"] == "deepgram"
-    assert settings["agent"]["listen"]["provider"]["model"] == "nova-3"
-    assert settings["agent"]["think"]["provider"]["type"] == "open_ai"
-    assert settings["agent"]["think"]["endpoint"]["url"] == "http://localhost:8080/v1/chat/completions"
-    assert settings["agent"]["speak"]["provider"]["type"] == "deepgram"
-    assert "prompt" in settings["agent"]["think"]
+    assert isinstance(settings, AgentV1Settings)
+    assert settings.type == "Settings"
+    assert settings.tags == ["deepgram-examples"]
+
+    settings_dict = settings.dict()
+    assert settings_dict["audio"]["input"]["encoding"] == "linear16"
+    assert settings_dict["audio"]["input"]["sample_rate"] == 16000
+    assert settings_dict["agent"]["listen"]["provider"]["type"] == "deepgram"
+    assert settings_dict["agent"]["listen"]["provider"]["model"] == "nova-3"
+    assert settings_dict["agent"]["think"]["provider"]["type"] == "open_ai"
+    assert settings_dict["agent"]["think"]["endpoint"]["url"] == "http://localhost:8080/v1/chat/completions"
+    assert settings_dict["agent"]["speak"]["provider"]["type"] == "deepgram"
+    assert "prompt" in settings_dict["agent"]["think"]
 
     print("Voice Agent settings builder working")
 
@@ -148,24 +153,25 @@ def test_voice_agent_settings_builder():
 def test_voice_agent_accepts_custom_endpoint_settings():
     """Verify the Voice Agent WebSocket accepts Settings with think.endpoint.
 
-    Connects to the real Deepgram Voice Agent API with think.endpoint.url
-    pointing to a custom HTTPS endpoint and confirms SettingsApplied.
-    The endpoint uses OpenAI's real URL to pass validation — in production
-    this would be your deployed proxy URL.
+    Connects to the real Deepgram Voice Agent API using the SDK's
+    agent.v1.connect() method with think.endpoint.url pointing to a custom
+    HTTPS endpoint and confirms SettingsApplied. The endpoint uses OpenAI's
+    real URL to pass validation — in production this would be your deployed
+    proxy URL.
     """
-    import websockets.sync.client
-
-    from demo_agent import DG_AGENT_URL
+    from deepgram import DeepgramClient
+    from deepgram.agent.v1.types.agent_v1settings import AgentV1Settings
 
     api_key = os.environ["DEEPGRAM_API_KEY"]
 
-    settings = {
-        "type": "Settings",
-        "audio": {
+    settings = AgentV1Settings(
+        type="Settings",
+        tags=["deepgram-examples"],
+        audio={
             "input": {"encoding": "linear16", "sample_rate": 16000},
             "output": {"encoding": "linear16", "sample_rate": 16000},
         },
-        "agent": {
+        agent={
             "listen": {"provider": {"type": "deepgram", "model": "nova-3"}},
             "think": {
                 "provider": {"type": "open_ai", "model": "gpt-4o-mini"},
@@ -179,42 +185,35 @@ def test_voice_agent_accepts_custom_endpoint_settings():
             },
             "speak": {"provider": {"type": "deepgram", "model": "aura-2-thalia-en"}},
         },
-    }
-
-    ws = websockets.sync.client.connect(
-        DG_AGENT_URL,
-        additional_headers={"Authorization": f"Token {api_key}"},
-        open_timeout=10,
     )
 
-    try:
-        ws.send(json.dumps(settings))
+    client = DeepgramClient(api_key=api_key)
+
+    with client.agent.v1.connect() as ws:
+        ws.send_settings(settings)
 
         got_welcome = False
         got_settings_applied = False
 
         for _ in range(30):
             try:
-                raw = ws.recv(timeout=5)
-            except TimeoutError:
+                msg = ws.recv()
+            except Exception:
                 break
-            if isinstance(raw, bytes):
+            if isinstance(msg, bytes):
                 continue
-            msg = json.loads(raw)
-            if msg.get("type") == "Welcome":
+            msg_type = getattr(msg, "type", "")
+            if msg_type == "Welcome":
                 got_welcome = True
-            elif msg.get("type") == "SettingsApplied":
+            elif msg_type == "SettingsApplied":
                 got_settings_applied = True
                 break
-            elif msg.get("type") == "Error":
-                raise AssertionError(f"Agent error: {msg.get('description')}")
+            elif msg_type == "Error":
+                raise AssertionError(f"Agent error: {getattr(msg, 'description', msg)}")
 
         assert got_welcome, "Never received Welcome message"
         assert got_settings_applied, "Never received SettingsApplied message"
         print("Voice Agent accepted custom endpoint settings — SettingsApplied received")
-
-    finally:
-        ws.close()
 
 
 if __name__ == "__main__":
