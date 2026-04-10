@@ -176,7 +176,7 @@ def test_voice_agent_accepts_custom_endpoint_settings():
             "think": {
                 "provider": {"type": "open_ai", "model": "gpt-4o-mini"},
                 "endpoint": {
-                    "url": "https://api.openai.com/v1/chat/completions",
+                    "url": "https://api.openai.com/v1",
                     "headers": {
                         "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', '')}",
                     },
