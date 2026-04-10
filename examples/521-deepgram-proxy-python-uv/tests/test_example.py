@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from fastapi.testclient import TestClient
 from server import create_app
 
-AUDIO_URL = "https://dpgr.am/spacewalk.wav"
+AUDIO_URL = "https://static.deepgram.com/examples/Bueller-Life-moves-pretty-fast.wav"
 TEST_PORT = 3097
 
 app = create_app()
@@ -56,8 +56,8 @@ def test_listen_prerecorded():
     data = resp.json()
 
     transcript = data["results"]["channels"][0]["alternatives"][0]["transcript"]
-    assert len(transcript) >= 66, (
-        f"Transcript too short: {len(transcript)} chars, expected >= 66"
+    assert len(transcript) >= 20, (
+        f"Transcript too short: {len(transcript)} chars, expected >= 20"
     )
     print(f"/v1/listen -> {len(transcript)} chars")
     print(f"  Preview: '{transcript[:80]}...'")
@@ -123,7 +123,7 @@ def test_websocket_live_stt():
             while offset < len(pcm_data) and offset < max_bytes:
                 ws.send(pcm_data[offset : offset + chunk_size])
                 offset += chunk_size
-                time.sleep(0.01)
+                time.sleep(chunk_size / (16000 * 2))
 
                 try:
                     ws.socket.setblocking(False)
