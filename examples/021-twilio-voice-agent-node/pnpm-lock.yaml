@@ -9,19 +9,19 @@ importers:
   .:
     dependencies:
       dotenv:
-        specifier: ^16.4.0
+        specifier: 16.6.1
         version: 16.6.1
       express:
-        specifier: ^4.21.0
+        specifier: 4.22.1
         version: 4.22.1
       express-ws:
-        specifier: ^5.0.2
+        specifier: 5.0.2
         version: 5.0.2(express@4.22.1)
       twilio:
-        specifier: ^5.4.0
+        specifier: 5.13.1
         version: 5.13.1
       ws:
-        specifier: ^8.18.0
+        specifier: 8.20.0
         version: 8.20.0
 
 packages:
