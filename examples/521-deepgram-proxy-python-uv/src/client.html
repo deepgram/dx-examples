@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deepgram Proxy — Demo Client</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { margin-bottom: 0.5rem; }
+    p.subtitle { color: #666; margin-bottom: 1.5rem; }
+    section { margin-bottom: 2rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+    h2 { margin-bottom: 0.75rem; font-size: 1.1rem; }
+    label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+    input, textarea { width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 0.75rem; font-family: inherit; }
+    button { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    .btn-primary { background: #13ef95; color: #000; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #transcript, #prerecorded-result, #tts-status { background: #f5f5f5; padding: 0.75rem; border-radius: 4px; min-height: 3rem; white-space: pre-wrap; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Deepgram Proxy Demo</h1>
+  <p class="subtitle">All Deepgram API calls go through the proxy — your API key stays server-side.</p>
+
+  <section>
+    <h2>Live Microphone Transcription</h2>
+    <button id="mic-btn" class="btn-primary">Start Mic</button>
+    <div id="transcript" style="margin-top: 0.75rem;"></div>
+  </section>
+
+  <section>
+    <h2>Pre-recorded Transcription</h2>
+    <label for="audio-url">Audio URL</label>
+    <input id="audio-url" type="url" value="https://static.deepgram.com/examples/Bueller-Life-moves-pretty-fast.wav" />
+    <button id="prerecorded-btn" class="btn-primary">Transcribe</button>
+    <div id="prerecorded-result" style="margin-top: 0.75rem;"></div>
+  </section>
+
+  <section>
+    <h2>Text-to-Speech</h2>
+    <label for="tts-text">Text</label>
+    <textarea id="tts-text" rows="2">Hello from the Deepgram proxy server. This audio was generated server-side.</textarea>
+    <button id="tts-btn" class="btn-primary">Speak</button>
+    <div id="tts-status" style="margin-top: 0.75rem;"></div>
+  </section>
+
+  <script>
+    const micBtn = document.getElementById('mic-btn');
+    const transcriptEl = document.getElementById('transcript');
+    let mediaStream = null;
+    let ws = null;
+    let audioContext = null;
+    let processor = null;
+
+    micBtn.addEventListener('click', async () => {
+      if (ws) {
+        ws.close();
+        mediaStream?.getTracks().forEach(t => t.stop());
+        audioContext?.close();
+        ws = null; mediaStream = null; audioContext = null; processor = null;
+        micBtn.textContent = 'Start Mic';
+        micBtn.className = 'btn-primary';
+        return;
+      }
+
+      transcriptEl.textContent = '';
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioContext = new AudioContext({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(mediaStream);
+
+      await audioContext.audioWorklet.addModule(URL.createObjectURL(new Blob([`
+        class PCMProcessor extends AudioWorkletProcessor {
+          process(inputs) {
+            const input = inputs[0][0];
+            if (input) {
+              const int16 = new Int16Array(input.length);
+              for (let i = 0; i < input.length; i++) {
+                int16[i] = Math.max(-32768, Math.min(32767, Math.round(input[i] * 32767)));
+              }
+              this.port.postMessage(int16.buffer, [int16.buffer]);
+            }
+            return true;
+          }
+        }
+        registerProcessor('pcm-processor', PCMProcessor);
+      `], { type: 'application/javascript' })));
+
+      processor = new AudioWorkletNode(audioContext, 'pcm-processor');
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/v1/listen/stream`);
+      ws.binaryType = 'arraybuffer';
+
+      processor.port.onmessage = (e) => {
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(e.data);
+        }
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          const text = data?.channel?.alternatives?.[0]?.transcript;
+          if (text) {
+            if (data.is_final) {
+              transcriptEl.textContent += text + '\n';
+            }
+          }
+        } catch {}
+      };
+
+      ws.onclose = () => { micBtn.textContent = 'Start Mic'; micBtn.className = 'btn-primary'; };
+
+      micBtn.textContent = 'Stop Mic';
+      micBtn.className = 'btn-danger';
+    });
+
+    const preBtn = document.getElementById('prerecorded-btn');
+    const preResult = document.getElementById('prerecorded-result');
+    const audioUrlInput = document.getElementById('audio-url');
+
+    preBtn.addEventListener('click', async () => {
+      preBtn.disabled = true;
+      preResult.textContent = 'Transcribing...';
+      try {
+        const res = await fetch('/v1/listen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: audioUrlInput.value, smart_format: true }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          preResult.textContent = `Error: ${data.error}`;
+        } else {
+          preResult.textContent = data.results?.channels?.[0]?.alternatives?.[0]?.transcript || 'No transcript returned';
+        }
+      } catch (err) {
+        preResult.textContent = `Error: ${err.message}`;
+      }
+      preBtn.disabled = false;
+    });
+
+    const ttsBtn = document.getElementById('tts-btn');
+    const ttsStatus = document.getElementById('tts-status');
+    const ttsText = document.getElementById('tts-text');
+
+    ttsBtn.addEventListener('click', async () => {
+      ttsBtn.disabled = true;
+      ttsStatus.textContent = 'Generating audio...';
+      try {
+        const res = await fetch('/v1/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: ttsText.value }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          ttsStatus.textContent = `Error: ${err.error}`;
+          ttsBtn.disabled = false;
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.play();
+        ttsStatus.textContent = 'Playing audio...';
+        audio.onended = () => { ttsStatus.textContent = 'Done.'; URL.revokeObjectURL(url); };
+      } catch (err) {
+        ttsStatus.textContent = `Error: ${err.message}`;
+      }
+      ttsBtn.disabled = false;
+    });
+  </script>
+</body>
+</html>
