@@ -20,7 +20,7 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [060](examples/060-discord-bot-node/) | Discord Bot — Transcribe Audio Attachments with Deepgram | Node.js | Discord |
 | [070](examples/070-vonage-voice-websocket-node/) | Vonage Voice API — Real-Time Call Transcription | Node.js | Vonage |
 | [080](examples/080-pipecat-voice-pipeline-python/) | Pipecat Voice Pipeline — Conversational Bot with Deepgram STT & TTS | Python | Pipecat |
-| [090](examples/090-expo-live-transcription-js/) | Expo Live Transcription | JavaScript | Expo |
+| [090](examples/090-expo-live-transcription-js/) | Expo Live Transcription | Node.js | Expo |
 | [100](examples/100-fastapi-audio-transcription-python/) | FastAPI Audio Transcription API | Python | FastAPI |
 | [110](examples/110-cloudflare-worker-transcription-js/) | Cloudflare Worker — Edge Audio Transcription | Node.js | Cloudflare |
 | [120](examples/120-slack-transcribe-bot-node/) | Slack Bot — Auto-Transcribe Audio Messages with Deepgram | Node.js | Slack |
@@ -42,7 +42,7 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [290](examples/290-aws-lambda-python-transcription/) | AWS Lambda Serverless Audio Transcription | Python | AWS Lambda |
 | [300](examples/300-spring-boot-live-transcription-java/) | Spring Boot Real-Time Transcription with Deepgram | Java | Spring Boot |
 | [310](examples/310-crewai-voice-agents-python/) | CrewAI Voice-Enabled Multi-Agent System with Deepgram | Python | CrewAI |
-| [340](examples/340-tauri-live-transcription-rust-ts/) | Tauri Desktop Live Transcription | Rust | Tauri |
+| [340](examples/340-tauri-live-transcription-rust-ts/) | Tauri Desktop Live Transcription | Python | Tauri |
 | [350](examples/350-asterisk-freeswitch-deepgram-stt-python/) | Asterisk / FreeSWITCH PBX to Deepgram Streaming STT | Python | Asterisk/FreeSWITCH |
 | [360](examples/360-kotlin-android-live-transcription/) | Kotlin Android Live Transcription | Kotlin | Jetpack Compose |
 | [370](examples/370-swift-ios-live-transcription/) | Swift iOS Live Transcription | Swift | SwiftUI |
@@ -52,7 +52,11 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [440](examples/440-plivo-media-streams-node/) | Plivo Audio Streaming — Real-Time Call Transcription | Node.js | Plivo |
 | [450](examples/450-jitsi-deepgram-stt-node/) | Jitsi Meet Real-Time Transcription with Deepgram STT | Node.js | Jitsi |
 | [460](examples/460-webex-recording-transcription-node/) | Webex Recording Transcription with Deepgram | Node.js | Webex |
-| [480](examples/480-obs-captioning-plugin-c/) | OBS Studio Live Captioning Plugin (C + Deepgram STT) | C | OBS Studio |
+| [480](examples/480-obs-captioning-plugin-c/) | OBS Studio Live Captioning Plugin (C + Deepgram STT) | Python | OBS Studio |
+| [490](examples/490-haystack-deepgram-stt-pipeline-python/) | Haystack Audio Transcription Pipeline with Deepgram STT | Python | Haystack |
+| [500](examples/500-semantic-kernel-voice-plugin-dotnet/) | Semantic Kernel Voice Plugin with Deepgram (.NET) | JavaScript | Semantic Kernel |
+| [510](examples/510-gin-live-transcription-go/) | Gin Real-Time WebSocket Transcription Server | Go | Gin |
+| [520](examples/520-node-deepgram-proxy/) | Deepgram Proxy Server (Node.js) | Node.js | Deepgram SDK |
 <!-- examples-table-end -->
 
 ## CI / testing
