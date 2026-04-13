@@ -1,9 +1,39 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
+
   "minimumReleaseAge": "11 days",
+
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 5am on monday"]
-  }
+  },
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "minimumReleaseAge": null
+  },
+
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 3,
+
+  "packageRules": [
+    {
+      "description": "Group all updates within the same example into one PR",
+      "matchPaths": ["examples/**"],
+      "groupName": "{{parentDir}} — dependency updates",
+      "groupSlug": "{{parentDir}}"
+    },
+    {
+      "description": "Group .github/scripts Python deps together",
+      "matchPaths": [".github/**"],
+      "groupName": ".github pipeline dependencies"
+    },
+    {
+      "description": "Pin all Node.js packages to exact versions",
+      "matchManagers": ["npm"],
+      "rangeStrategy": "pin"
+    }
+  ]
 }
