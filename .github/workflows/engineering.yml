@@ -260,6 +260,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Container runs as root — reclaim ownership before git add
+          sudo chown -R "$(id -u):$(id -g)" "examples/${WORKSPACE_SUBDIR}/"
+
           git checkout -b "$branch"
           git add "examples/${WORKSPACE_SUBDIR}/"
 
