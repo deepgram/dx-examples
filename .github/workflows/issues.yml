@@ -79,11 +79,7 @@ jobs:
             # Issue event: check author org membership OR type:suggestion label
             issue_json=$(gh issue view "$NUMBER" --json author,labels)
             author=$(echo "$issue_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['author']['login'])")
-            has_label=$(echo "$issue_json" | python3 -c "
-import json, sys
-labels = {l['name'] for l in json.load(sys.stdin)['labels']}
-print('true' if 'type:suggestion' in labels else 'false')
-")
+            has_label=$(echo "$issue_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print('true' if any(l['name']=='type:suggestion' for l in d['labels']) else 'false')")
 
             if [[ "$author" != *"[bot]"* ]] && [[ "$has_label" != "true" ]]; then
               http_line=$(gh api "orgs/deepgram/members/${author}" -i 2>/dev/null | head -1)
@@ -107,34 +103,8 @@ print('true' if 'type:suggestion' in labels else 'false')
               --state open \
               --limit 50 \
               --json number \
-              --jq '.[].number' | python3 -c "
-import sys, subprocess, json
-
-numbers = [int(l.strip()) for l in sys.stdin if l.strip()]
-numbers.reverse()  # oldest first
-
-for num in numbers:
-    result = subprocess.run(
-        ['gh', 'issue', 'view', str(num),
-         '--repo', '${{ github.repository }}',
-         '--json', 'comments,labels'],
-        capture_output=True, text=True
-    )
-    data = json.loads(result.stdout)
-
-    # Skip already-built issues
-    label_names = {l['name'] for l in data.get('labels', [])}
-    if {'type:example', 'automated'}.intersection(label_names):
-        continue
-
-    comments = data.get('comments', [])
-    if not comments:
-        print(num)
-        break
-    if '<!-- claude-reply -->' not in comments[-1].get('body', ''):
-        print(num)
-        break
-" 2>/dev/null || true)
+              --jq '.[].number' | python3 .github/scripts/find_unhandled_issue.py \
+              --repo "${{ github.repository }}" 2>/dev/null || true)
 
             if [ -z "$NUMBER" ]; then
               echo "skip=true" >> "$GITHUB_OUTPUT"

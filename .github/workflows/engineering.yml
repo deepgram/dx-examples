@@ -78,27 +78,8 @@ jobs:
               --label "type:suggestion" \
               --state open \
               --json number \
-              --limit 50 | python3 -c "
-import json, sys, subprocess
-
-issues = json.load(sys.stdin)
-numbers = [i['number'] for i in reversed(issues)]  # oldest first
-
-for num in numbers:
-    r = subprocess.run(
-        ['gh', 'issue', 'view', str(num),
-         '--repo', '${{ github.repository }}',
-         '--json', 'comments'],
-        capture_output=True, text=True
-    )
-    comments = json.loads(r.stdout).get('comments', [])
-    if any('<!-- pr-opened -->' in c.get('body', '') for c in comments):
-        continue  # build already started or completed
-    print(json.dumps({'number': num}))
-    break
-else:
-    print('SKIP')
-")
+              --limit 50 | python3 .github/scripts/find_unprocessed_issue.py \
+              --repo "${{ github.repository }}")
             if [ "$result" = "SKIP" ] || [ -z "$result" ]; then
               echo "No unprocessed suggestions found."
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -111,11 +92,7 @@ else:
           issue_json=$(gh issue view "$number" --json author,body,labels)
           author=$(echo "$issue_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['author']['login'])")
           body=$(echo "$issue_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['body'])")
-          has_suggestion=$(echo "$issue_json" | python3 -c "
-import json, sys
-labels = {l['name'] for l in json.load(sys.stdin)['labels']}
-print('true' if 'type:suggestion' in labels else 'false')
-")
+          has_suggestion=$(echo "$issue_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print('true' if any(l['name']=='type:suggestion' for l in d['labels']) else 'false')")
 
           # ------------------------------------------------------------------
           # Authz: build if any of the following are true:
