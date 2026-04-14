@@ -21,13 +21,17 @@
   "packageRules": [
     {
       "description": "Group all updates within the same example into one PR",
-      "matchPaths": ["examples/**"],
+      "matchFileNames": [
+        "examples/**"
+      ],
       "groupName": "{{parentDir}} — dependency updates",
       "groupSlug": "{{parentDir}}"
     },
     {
       "description": "Group .github/scripts Python deps together",
-      "matchPaths": [".github/**"],
+      "matchFileNames": [
+        ".github/**"
+      ],
       "groupName": ".github pipeline dependencies"
     },
     {
