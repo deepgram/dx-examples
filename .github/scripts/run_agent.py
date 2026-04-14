@@ -85,9 +85,27 @@ def exec_in_container(command: str, timeout: int = 300) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def write_file(path: str, content: str) -> dict[str, Any]:
-    full = WORKSPACE / path
-    full.parent.mkdir(parents=True, exist_ok=True)
-    full.write_text(content)
+    # Write to a temp file on the host, then use docker cp to put it in the
+    # container. This avoids PermissionError when the container (running as root)
+    # has already created parent directories that the host runner cannot write into.
+    import tempfile as _tmp
+    with _tmp.NamedTemporaryFile(mode="w", suffix=".tmp", delete=False) as tf:
+        tf.write(content)
+        tmp_path = tf.name
+    try:
+        container_path = f"/workspace/{path}"
+        # Ensure parent directory exists inside the container
+        mkdir_result = exec_in_container(f"mkdir -p \"$(dirname '{container_path}')\"")
+        if mkdir_result["exit_code"] != 0:
+            return {"error": f"mkdir failed: {mkdir_result['stderr'][:200]}"}
+        cp_result = subprocess.run(
+            ["docker", "cp", tmp_path, f"{CONTAINER_NAME}:{container_path}"],
+            capture_output=True, text=True,
+        )
+        if cp_result.returncode != 0:
+            return {"error": f"docker cp failed: {cp_result.stderr[:200]}"}
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
     return {"written": path, "bytes": len(content)}
 
 
