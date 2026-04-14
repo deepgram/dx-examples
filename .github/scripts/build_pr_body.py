@@ -85,6 +85,8 @@ def main() -> None:
     parser.add_argument("--runtime", required=True)
     parser.add_argument("--example", required=True)
     parser.add_argument("--build-log", default="/tmp/build-log.md")
+    parser.add_argument("--incomplete", action="store_true",
+                        help="Mark PR as WIP / turn limit reached")
     args = parser.parse_args()
 
     workspace = Path(args.workspace)
@@ -95,7 +97,14 @@ def main() -> None:
     apply_needs_credentials = needs_credentials(test_files)
 
     lines = []
-    lines.append(f"Closes #{args.issue}\n")
+    if args.incomplete:
+        lines.append(f"Part of #{args.issue} — turn limit reached, build incomplete.\n")
+        lines.append(
+            f"> ⚠️ **WIP** — the agent ran out of turns. Comment `@claude continue` "
+            f"to resume from where it left off.\n"
+        )
+    else:
+        lines.append(f"Closes #{args.issue}\n")
     lines.append(
         f"**Action:** {args.action.capitalize()}  \n"
         f"**Runtime:** `{args.runtime}`  \n"

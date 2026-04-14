@@ -221,9 +221,12 @@ jobs:
 
       # ------------------------------------------------------------------
       # 8. Run the agent build loop
+      #    exit 0 = complete, exit 2 = turn limit (draft PR), exit 1 = error
       # ------------------------------------------------------------------
       - name: Run agent
+        id: agent
         if: steps.issue.outputs.skip != 'true'
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ISSUE_BODY: ${{ steps.issue.outputs.body }}
@@ -235,18 +238,39 @@ jobs:
           WORKSPACE_DIR: ${{ github.workspace }}/examples/${{ steps.plan.outputs.workspace_subdir }}
           EXAMPLES_DIR: ${{ github.workspace }}
           BUILD_LOG: /tmp/build-log.md
-        run: python3 .github/scripts/run_agent.py
+          MAX_TURNS: "150"
+          PRIOR_STATE: ${{ steps.issue.outputs.prior_state }}
+        run: |
+          python3 .github/scripts/run_agent.py
+          echo "agent_exit=$?" >> "$GITHUB_OUTPUT"
+        # Capture exit code explicitly — continue-on-error swallows it
+      - name: Capture agent exit code
+        id: agent_exit
+        if: steps.issue.outputs.skip != 'true'
+        run: |
+          # continue-on-error means outcome is always 'success' — read the file
+          if [ -f /tmp/agent-state.json ]; then
+            echo "code=2" >> "$GITHUB_OUTPUT"
+          else
+            # If no state file: either clean success (0) or hard failure (1)
+            if [ "${{ steps.agent.outcome }}" = "success" ]; then
+              echo "code=0" >> "$GITHUB_OUTPUT"
+            else
+              echo "code=1" >> "$GITHUB_OUTPUT"
+            fi
+          fi
 
       # ------------------------------------------------------------------
-      # 9. Commit the output to a branch
+      # 9. Commit the output to a branch (complete or incomplete)
       # ------------------------------------------------------------------
       - name: Commit and push example branch
         id: branch
-        if: steps.issue.outputs.skip != 'true'
+        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code != '1'
         env:
           WORKSPACE_SUBDIR: ${{ steps.plan.outputs.workspace_subdir }}
           WORKSPACE_ACTION: ${{ steps.plan.outputs.action }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          AGENT_EXIT: ${{ steps.agent_exit.outputs.code }}
         run: |
           if [ "$WORKSPACE_ACTION" = "modify" ]; then
             branch="example/update-${WORKSPACE_SUBDIR}"
@@ -266,18 +290,21 @@ jobs:
           git checkout -b "$branch"
           git add "examples/${WORKSPACE_SUBDIR}/"
 
-          git commit -m "feat(examples): ${commit_subject}
+          wip=""
+          if [ "$AGENT_EXIT" = "2" ]; then wip=" [WIP — turn limit reached]"; fi
+
+          git commit -m "feat(examples): ${commit_subject}${wip}
 
           Relates to #${ISSUE_NUMBER}"
 
           git push origin "$branch"
 
       # ------------------------------------------------------------------
-      # 10. Open the PR
+      # 10a. Open PR (complete build)
       # ------------------------------------------------------------------
       - name: Open pull request
         id: pr
-        if: steps.issue.outputs.skip != 'true'
+        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WORKSPACE_SUBDIR: ${{ steps.plan.outputs.workspace_subdir }}
@@ -292,7 +319,6 @@ jobs:
             pr_title="feat(examples): add ${WORKSPACE_SUBDIR}"
           fi
 
-          # Build PR body — prints "needs-credentials" if the label should apply
           needs_creds=$(python3 .github/scripts/build_pr_body.py \
             --workspace "$WORKSPACE_DIR" \
             --issue "$ISSUE_NUMBER" \
@@ -314,22 +340,92 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------
-      # 11. Comment on the issue linking the PR
+      # 10b. Open draft PR (incomplete — turn limit reached)
       # ------------------------------------------------------------------
-      - name: Comment on issue
-        if: steps.issue.outputs.skip != 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      - name: Open draft pull request
+        id: draft_pr
+        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '2'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKSPACE_SUBDIR: ${{ steps.plan.outputs.workspace_subdir }}
+          RUNTIME: ${{ steps.plan.outputs.runtime }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          WORKSPACE_ACTION: ${{ steps.plan.outputs.action }}
+          WORKSPACE_DIR: ${{ github.workspace }}/examples/${{ steps.plan.outputs.workspace_subdir }}
+        run: |
+          if [ "$WORKSPACE_ACTION" = "modify" ]; then
+            pr_title="feat(examples): update ${WORKSPACE_SUBDIR} [WIP]"
+          else
+            pr_title="feat(examples): add ${WORKSPACE_SUBDIR} [WIP]"
+          fi
+
+          needs_creds=$(python3 .github/scripts/build_pr_body.py \
+            --workspace "$WORKSPACE_DIR" \
+            --issue "$ISSUE_NUMBER" \
+            --action "$WORKSPACE_ACTION" \
+            --runtime "$RUNTIME" \
+            --example "$WORKSPACE_SUBDIR" \
+            --build-log /tmp/build-log.md \
+            --incomplete)
+
+          labels="type:example,automated"
+          if [ "$needs_creds" = "needs-credentials" ]; then
+            labels="$labels,needs-credentials"
+          fi
+
+          url=$(gh pr create \
+            --title "$pr_title" \
+            --body-file /tmp/pr-body.md \
+            --base main \
+            --label "$labels" \
+            --draft)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------
+      # 11a. Comment on issue — complete build
+      # ------------------------------------------------------------------
+      - name: Comment on issue (complete)
+        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           PR_URL: ${{ steps.pr.outputs.url }}
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: parseInt(process.env.ISSUE_NUMBER),
-              body: `✅ Example built and PR opened: ${process.env.PR_URL}\n\nReview the PR before merging.\n\n<!-- pr-opened -->`,
-            });
+        run: |
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --body "✅ Example built and PR opened: ${PR_URL}
+
+          Review the PR before merging.
+
+          <!-- pr-opened -->"
+
+      # ------------------------------------------------------------------
+      # 11b. Comment on issue — incomplete (draft PR, needs continuation)
+      # ------------------------------------------------------------------
+      - name: Comment on issue (incomplete)
+        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          PR_URL: ${{ steps.draft_pr.outputs.url }}
+        run: |
+          state=$(cat /tmp/agent-state.json 2>/dev/null || echo '{}')
+          phases=$(echo "$state" | python3 -c "import json,sys; d=json.load(sys.stdin); print(', '.join(d.get('phases',[])))")
+          tests=$(echo "$state" | python3 -c "import json,sys; d=json.load(sys.stdin); print('passing' if d.get('tests_passing') else ('failing' if d.get('tests_failing') else 'not yet run'))")
+          turns=$(echo "$state" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('turns_used','?'))")
+
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --body "⚠️ Build hit the turn limit after ${turns} turns. Draft PR opened: ${PR_URL}
+
+          **Progress so far:**
+          - Phases complete: ${phases:-none}
+          - Tests: ${tests}
+
+          To continue: comment \`@claude continue\` on this issue or on the draft PR.
+
+          <!-- pr-opened -->
+          <!-- agent-state: ${state} -->"
 
       # ------------------------------------------------------------------
       # Cleanup — always remove build:in-progress label
@@ -429,9 +525,18 @@ jobs:
             fi
           fi
 
-          echo "number=$number"           >> "$GITHUB_OUTPUT"
-          echo "branch=$branch"           >> "$GITHUB_OUTPUT"
+          echo "number=$number"             >> "$GITHUB_OUTPUT"
+          echo "branch=$branch"             >> "$GITHUB_OUTPUT"
           echo "context_type=$context_type" >> "$GITHUB_OUTPUT"
+
+          # Extract prior agent-state from any hidden comment on this issue/PR
+          prior_state=$(gh issue view "$number" \
+            --repo "${{ github.repository }}" \
+            --json comments \
+            --jq '[.comments[].body | select(contains("<!-- agent-state:"))] | last' \
+            2>/dev/null | \
+            python3 .github/scripts/extract_agent_state.py || true)
+          echo "prior_state=$prior_state" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         if: steps.auth.outputs.allowed == 'true'
@@ -474,6 +579,12 @@ jobs:
             - ${{ steps.ctx.outputs.context_type }}: #${{ steps.ctx.outputs.number }}
             - Branch checked out: ${{ steps.ctx.outputs.branch }}
             - Comment URL: ${{ github.event.comment.html_url }}
+            ${{ steps.ctx.outputs.prior_state != '' && format('
+            Prior build state (skip completed work — go straight to what is missing):
+            ```json
+            {0}
+            ```
+            ', steps.ctx.outputs.prior_state) || '' }}
 
             When you are done, post a reply comment on #${{ steps.ctx.outputs.number }} summarising what you did (or explaining clearly why you couldn't do it). Use this exact command to post:
 

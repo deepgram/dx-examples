@@ -344,6 +344,36 @@ def run_agent() -> None:
     7. Output AGENT_DONE when complete
     """).strip()
 
+    # If this is a continuation run, inject prior state so the agent skips
+    # already-completed phases and goes straight to what's left.
+    prior_state_raw = os.environ.get("PRIOR_STATE", "").strip()
+    if prior_state_raw:
+        try:
+            prior = json.loads(prior_state_raw)
+            phases_done = prior.get("phases", [])
+            tests_ok = prior.get("tests_passing", False)
+            last_output = prior.get("last_test_output", "")
+            files_done = prior.get("files_written", [])
+            continuation_context = textwrap.dedent(f"""
+            ## Continuation — prior run context
+
+            A previous build run used {prior.get('turns_used', '?')} turns and stopped
+            before completing. The following work is already done — **do not redo it**,
+            go straight to what's missing:
+
+            Phases complete: {', '.join(phases_done) if phases_done else 'none'}
+            Tests passing: {tests_ok}
+            Files already written: {', '.join(files_done) if files_done else 'none'}
+            {f'Last test output:{chr(10)}{last_output}' if last_output else ''}
+
+            Start by running `list_files` to see current state, then run the tests
+            to see exactly what is failing, and fix only that.
+            """).strip()
+            user_message = continuation_context + "\n\n---\n\n" + user_message
+            log("Continuation run — prior state injected", level="system")
+        except (json.JSONDecodeError, KeyError):
+            log("PRIOR_STATE present but unparseable — ignoring", level="error")
+
     messages = [{"role": "user", "content": user_message}]
     turn = 0
 
@@ -360,12 +390,37 @@ def run_agent() -> None:
         if turn > MAX_TURNS:
             msg = (
                 f"AGENT_TURN_LIMIT_EXCEEDED: reached {MAX_TURNS} turns without completing. "
-                "The build did not reach a passing state. Review the build log for the last known state."
+                "Committing partial work and opening a draft PR for manual continuation."
             )
             log(msg, level="error")
             with BUILD_LOG.open("a") as f:
-                f.write(f"\n---\n\n## ❌ Turn limit exceeded\n\n{msg}\n")
-            sys.exit(1)
+                f.write(f"\n---\n\n## ⚠️ Turn limit reached\n\n{msg}\n")
+            # Write machine-readable state so a continuation run can skip
+            # completed work. The workflow reads this and embeds it in the
+            # draft PR / issue comment as a hidden <!-- agent-state --> block.
+            state = {
+                "turns_used": turn - 1,
+                "max_turns": MAX_TURNS,
+                "phases": sorted(
+                    args[0]
+                    for (pred, args) in wm._facts.items()
+                    if pred == "phase"
+                ),
+                "tests_passing": bool(wm.query("tests_passing")),
+                "tests_failing": bool(wm.query("tests_failing")),
+                "last_test_output": wm.query("last_test_output", ()) or "",
+                "files_written": sorted(
+                    args[0]
+                    for (pred, args) in wm._facts.items()
+                    if pred == "file_written"
+                ),
+                "example_number": EXAMPLE_NUMBER,
+                "example_slug": EXAMPLE_SLUG,
+                "workspace_action": WORKSPACE_ACTION,
+                "docker_image": DOCKER_IMAGE,
+            }
+            Path("/tmp/agent-state.json").write_text(json.dumps(state, indent=2))
+            sys.exit(2)  # 2 = incomplete (not error) — workflow opens draft PR
 
         log(f"Turn {turn}/{MAX_TURNS} — {wm.summary()}")
 
