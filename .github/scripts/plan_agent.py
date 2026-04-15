@@ -18,7 +18,7 @@ import re
 import sys
 from pathlib import Path
 
-from llm import messages_create, response_text
+from llm import messages_create, response_text, MODEL
 
 AVAILABLE_SECRET_NAMES = os.environ["SECRET_NAMES"].split(",")
 ISSUE_BODY = os.environ["ISSUE_BODY"]
