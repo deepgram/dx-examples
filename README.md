@@ -57,6 +57,7 @@ A collection of working examples showing how to use Deepgram SDKs with popular p
 | [500](examples/500-semantic-kernel-voice-plugin-dotnet/) | Semantic Kernel Voice Plugin with Deepgram (.NET) | JavaScript | Semantic Kernel |
 | [510](examples/510-gin-live-transcription-go/) | Gin Real-Time WebSocket Transcription Server | Go | Gin |
 | [520](examples/520-node-deepgram-proxy/) | Deepgram Proxy Server (Node.js) | Node.js | Deepgram SDK |
+| [540](examples/540-livekit-agents-python/) | LiveKit Agents with Deepgram STT/TTS | Python | LiveKit |
 <!-- examples-table-end -->
 
 ## CI / testing
