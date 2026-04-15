@@ -118,6 +118,15 @@ jobs:
           echo "$body" >> "$GITHUB_OUTPUT"
           echo "ISSUE_BODY_EOF" >> "$GITHUB_OUTPUT"
 
+          prior_state=$(gh issue view "$number" \
+            --repo "${{ github.repository }}" \
+            --json body,comments \
+            --jq '([.body] + [.comments[].body]) | map(select(contains("<!-- agent-state:"))) | last' \
+            2>/dev/null | python3 .github/scripts/extract_agent_state.py || true)
+          echo "prior_state<<PRIOR_STATE_EOF" >> "$GITHUB_OUTPUT"
+          echo "$prior_state" >> "$GITHUB_OUTPUT"
+          echo "PRIOR_STATE_EOF" >> "$GITHUB_OUTPUT"
+
       - name: Skip if nothing to build
         if: steps.issue.outputs.skip == 'true'
         run: echo "Skipping — no eligible issue to build."
@@ -178,6 +187,11 @@ jobs:
         if: steps.issue.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'anthropic' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || '' }}
+          LLM_PLAN_MODEL: ${{ secrets.LLM_PLAN_MODEL || '' }}
           ISSUE_BODY: ${{ steps.issue.outputs.body }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           EXAMPLE_NUMBER: ${{ steps.example_number.outputs.number }}
@@ -197,7 +211,54 @@ jobs:
           echo "workspace_subdir=$(echo "$plan" | python3 -c "import json,sys; print(json.load(sys.stdin)['workspace_subdir'])")" >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------
-      # 6. Build filtered env file (only required secrets, values injected)
+      # 6. Prepare working branch early
+      #    Reuse the existing branch/PR when present so continuation runs add
+      #    history instead of failing on push. This also gives the agent a
+      #    stable branch for deterministic checkpoint commits during the run.
+      # ------------------------------------------------------------------
+      - name: Prepare working branch
+        id: branch_ctx
+        if: steps.issue.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKSPACE_SUBDIR: ${{ steps.plan.outputs.workspace_subdir }}
+          WORKSPACE_ACTION: ${{ steps.plan.outputs.action }}
+        run: |
+          if [ "$WORKSPACE_ACTION" = "modify" ]; then
+            branch="example/update-${WORKSPACE_SUBDIR}"
+          else
+            branch="example/${WORKSPACE_SUBDIR}"
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch"
+            git checkout -B "$branch" "origin/$branch"
+          else
+            git checkout -b "$branch"
+          fi
+
+          pr_url=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "$branch" \
+            --state open \
+            --json url \
+            -q '.[0].url' 2>/dev/null || true)
+          pr_number=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "$branch" \
+            --state open \
+            --json number \
+            -q '.[0].number' 2>/dev/null || true)
+
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------
+      # 7. Build filtered env file (only required secrets, values injected)
       # ------------------------------------------------------------------
       - name: Build sandbox env file
         if: steps.issue.outputs.skip != 'true'
@@ -213,14 +274,14 @@ jobs:
           echo "Env file written with $(wc -l < /tmp/sandbox.env) secrets"
 
       # ------------------------------------------------------------------
-      # 7. Pull Docker image
+      # 8. Pull Docker image
       # ------------------------------------------------------------------
       - name: Pull sandbox image
         if: steps.issue.outputs.skip != 'true'
         run: docker pull ${{ steps.plan.outputs.docker_image }}
 
       # ------------------------------------------------------------------
-      # 8. Run the agent build loop
+      # 9. Run the agent build loop
       #    exit 0 = complete, exit 2 = turn limit (draft PR), exit 1 = error
       # ------------------------------------------------------------------
       - name: Run agent
@@ -229,163 +290,208 @@ jobs:
         continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'anthropic' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || '' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_BODY: ${{ steps.issue.outputs.body }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           EXAMPLE_NUMBER: ${{ steps.example_number.outputs.number }}
           EXAMPLE_SLUG: ${{ steps.plan.outputs.slug }}
           WORKSPACE_ACTION: ${{ steps.plan.outputs.action }}
+          WORKSPACE_SUBDIR: ${{ steps.plan.outputs.workspace_subdir }}
           DOCKER_IMAGE: ${{ steps.plan.outputs.docker_image }}
           WORKSPACE_DIR: ${{ github.workspace }}/examples/${{ steps.plan.outputs.workspace_subdir }}
           EXAMPLES_DIR: ${{ github.workspace }}
+          REPO_ROOT: ${{ github.workspace }}
+          REPO_SLUG: ${{ github.repository }}
+          BRANCH_NAME: ${{ steps.branch_ctx.outputs.branch }}
           BUILD_LOG: /tmp/build-log.md
           MAX_TURNS: "150"
           PRIOR_STATE: ${{ steps.issue.outputs.prior_state }}
         run: |
+          set +e
           python3 .github/scripts/run_agent.py
-          echo "agent_exit=$?" >> "$GITHUB_OUTPUT"
+          agent_exit=$?
+          echo "agent_exit=$agent_exit" >> "$GITHUB_OUTPUT"
+          exit "$agent_exit"
         # Capture exit code explicitly — continue-on-error swallows it
       - name: Capture agent exit code
         id: agent_exit
         if: steps.issue.outputs.skip != 'true'
         run: |
-          # continue-on-error means outcome is always 'success' — read the file
-          if [ -f /tmp/agent-state.json ]; then
-            echo "code=2" >> "$GITHUB_OUTPUT"
-          else
-            # If no state file: either clean success (0) or hard failure (1)
-            if [ "${{ steps.agent.outcome }}" = "success" ]; then
-              echo "code=0" >> "$GITHUB_OUTPUT"
-            else
-              echo "code=1" >> "$GITHUB_OUTPUT"
-            fi
+          code="${{ steps.agent.outputs.agent_exit }}"
+          if [ -z "$code" ]; then
+            code=1
           fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------
-      # 9. Commit the output to a branch (complete or incomplete)
+      # 10. Commit any residual changes not already checkpointed
       # ------------------------------------------------------------------
-      - name: Commit and push example branch
-        id: branch
-        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code != '1'
+      - name: Commit and push residual changes
+        if: steps.issue.outputs.skip != 'true'
         env:
           WORKSPACE_SUBDIR: ${{ steps.plan.outputs.workspace_subdir }}
           WORKSPACE_ACTION: ${{ steps.plan.outputs.action }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           AGENT_EXIT: ${{ steps.agent_exit.outputs.code }}
+          BRANCH_NAME: ${{ steps.branch_ctx.outputs.branch }}
         run: |
-          if [ "$WORKSPACE_ACTION" = "modify" ]; then
-            branch="example/update-${WORKSPACE_SUBDIR}"
-            commit_subject="update ${WORKSPACE_SUBDIR}"
-          else
-            branch="example/${WORKSPACE_SUBDIR}"
-            commit_subject="add ${WORKSPACE_SUBDIR}"
+          sudo chown -R "$(id -u):$(id -g)" "examples/${WORKSPACE_SUBDIR}/" 2>/dev/null || true
+          python3 -c "from pathlib import Path; import shutil; root=Path('examples/${WORKSPACE_SUBDIR}'); [shutil.rmtree(p, ignore_errors=True) for p in root.rglob('__pycache__') if p.is_dir()]; [p.unlink(missing_ok=True) for p in root.rglob('*.pyc')]; [shutil.rmtree(p, ignore_errors=True) for p in [root/'.pytest_cache'] if p.exists()]"
+
+          if ! git status --porcelain -- "examples/${WORKSPACE_SUBDIR}/" | grep -q .; then
+            echo "No residual changes to commit"
+            exit 0
           fi
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Container runs as root — reclaim ownership before git add
-          sudo chown -R "$(id -u):$(id -g)" "examples/${WORKSPACE_SUBDIR}/"
-
-          git checkout -b "$branch"
           git add "examples/${WORKSPACE_SUBDIR}/"
+          if git diff --cached --quiet -- "examples/${WORKSPACE_SUBDIR}/"; then
+            echo "No staged residual changes"
+            exit 0
+          fi
 
-          wip=""
-          if [ "$AGENT_EXIT" = "2" ]; then wip=" [WIP — turn limit reached]"; fi
+          if [ "$AGENT_EXIT" = "0" ]; then
+            commit_subject="complete ${WORKSPACE_SUBDIR}"
+            commit_type="feat"
+          else
+            commit_subject="checkpoint ${WORKSPACE_SUBDIR}"
+            commit_type="chore"
+          fi
 
-          git commit -m "feat(examples): ${commit_subject}${wip}
+          git commit -m "${commit_type}(examples): ${commit_subject}
 
           Relates to #${ISSUE_NUMBER}"
 
-          git push origin "$branch"
+          git push origin "HEAD:${BRANCH_NAME}" || {
+            git pull --rebase origin "$BRANCH_NAME"
+            git push origin "HEAD:${BRANCH_NAME}"
+          }
 
       # ------------------------------------------------------------------
-      # 10a. Open PR (complete build)
+      # 11. Upsert PR from the working branch
+      #     - complete build   -> ready PR
+      #     - incomplete/error -> draft PR (if branch has commits)
       # ------------------------------------------------------------------
-      - name: Open pull request
+      - name: Upsert pull request
         id: pr
-        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '0'
+        if: steps.issue.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_SLUG: ${{ github.repository }}
+          BRANCH_NAME: ${{ steps.branch_ctx.outputs.branch }}
           WORKSPACE_SUBDIR: ${{ steps.plan.outputs.workspace_subdir }}
           RUNTIME: ${{ steps.plan.outputs.runtime }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          ISSUE_BODY: ${{ steps.issue.outputs.body }}
           WORKSPACE_ACTION: ${{ steps.plan.outputs.action }}
           WORKSPACE_DIR: ${{ github.workspace }}/examples/${{ steps.plan.outputs.workspace_subdir }}
+          AGENT_EXIT: ${{ steps.agent_exit.outputs.code }}
         run: |
           if [ "$WORKSPACE_ACTION" = "modify" ]; then
-            pr_title="feat(examples): update ${WORKSPACE_SUBDIR}"
+            title_base="update ${WORKSPACE_SUBDIR}"
           else
-            pr_title="feat(examples): add ${WORKSPACE_SUBDIR}"
+            title_base="add ${WORKSPACE_SUBDIR}"
           fi
 
-          needs_creds=$(python3 .github/scripts/build_pr_body.py \
-            --workspace "$WORKSPACE_DIR" \
-            --issue "$ISSUE_NUMBER" \
-            --action "$WORKSPACE_ACTION" \
-            --runtime "$RUNTIME" \
-            --example "$WORKSPACE_SUBDIR" \
-            --build-log /tmp/build-log.md)
-
-          labels="type:example,automated"
-          if [ "$needs_creds" = "needs-credentials" ]; then
-            labels="$labels,needs-credentials"
-          fi
-
-          url=$(gh pr create \
-            --title "$pr_title" \
-            --body-file /tmp/pr-body.md \
-            --base main \
-            --label "$labels")
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-
-      # ------------------------------------------------------------------
-      # 10b. Open draft PR (incomplete — turn limit reached)
-      # ------------------------------------------------------------------
-      - name: Open draft pull request
-        id: draft_pr
-        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '2'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WORKSPACE_SUBDIR: ${{ steps.plan.outputs.workspace_subdir }}
-          RUNTIME: ${{ steps.plan.outputs.runtime }}
-          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
-          WORKSPACE_ACTION: ${{ steps.plan.outputs.action }}
-          WORKSPACE_DIR: ${{ github.workspace }}/examples/${{ steps.plan.outputs.workspace_subdir }}
-        run: |
-          if [ "$WORKSPACE_ACTION" = "modify" ]; then
-            pr_title="feat(examples): update ${WORKSPACE_SUBDIR} [WIP]"
+          if [ "$AGENT_EXIT" = "0" ]; then
+            pr_title="feat(examples): ${title_base}"
+            needs_creds=$(python3 .github/scripts/build_pr_body.py \
+              --workspace "$WORKSPACE_DIR" \
+              --issue "$ISSUE_NUMBER" \
+              --issue-body "$ISSUE_BODY" \
+              --action "$WORKSPACE_ACTION" \
+              --runtime "$RUNTIME" \
+              --example "$WORKSPACE_SUBDIR" \
+              --build-log /tmp/build-log.md)
           else
-            pr_title="feat(examples): add ${WORKSPACE_SUBDIR} [WIP]"
+            pr_title="feat(examples): ${title_base} [WIP]"
+            needs_creds=$(python3 .github/scripts/build_pr_body.py \
+              --workspace "$WORKSPACE_DIR" \
+              --issue "$ISSUE_NUMBER" \
+              --issue-body "$ISSUE_BODY" \
+              --action "$WORKSPACE_ACTION" \
+              --runtime "$RUNTIME" \
+              --example "$WORKSPACE_SUBDIR" \
+              --build-log /tmp/build-log.md \
+              --incomplete)
           fi
 
-          needs_creds=$(python3 .github/scripts/build_pr_body.py \
-            --workspace "$WORKSPACE_DIR" \
-            --issue "$ISSUE_NUMBER" \
-            --action "$WORKSPACE_ACTION" \
-            --runtime "$RUNTIME" \
-            --example "$WORKSPACE_SUBDIR" \
-            --build-log /tmp/build-log.md \
-            --incomplete)
+          if [ "$AGENT_EXIT" != "0" ] && [ -f /tmp/agent-state.json ]; then
+            hidden_state=$(python3 -c "import json; print(json.dumps(json.load(open('/tmp/agent-state.json')), separators=(',',':')))" )
+            printf "\n\n<!-- agent-state: %s -->\n" "$hidden_state" >> /tmp/pr-body.md
+          fi
 
-          labels="type:example,automated"
+          existing_number=$(gh pr list \
+            --repo "$REPO_SLUG" \
+            --head "$BRANCH_NAME" \
+            --state open \
+            --json number \
+            -q '.[0].number' 2>/dev/null || true)
+          existing_url=$(gh pr list \
+            --repo "$REPO_SLUG" \
+            --head "$BRANCH_NAME" \
+            --state open \
+            --json url \
+            -q '.[0].url' 2>/dev/null || true)
+          commit_count=$(git rev-list --count origin/main..HEAD 2>/dev/null || printf '0')
+
+          if [ -n "$existing_number" ]; then
+            gh pr edit "$existing_number" \
+              --repo "$REPO_SLUG" \
+              --title "$pr_title" \
+              --body-file /tmp/pr-body.md
+            gh pr edit "$existing_number" --repo "$REPO_SLUG" --add-label "type:example" --add-label "automated" >/dev/null 2>&1 || true
+            if [ "$needs_creds" = "needs-credentials" ]; then
+              gh pr edit "$existing_number" --repo "$REPO_SLUG" --add-label "needs-credentials" >/dev/null 2>&1 || true
+            fi
+            if [ "$AGENT_EXIT" = "0" ]; then
+              gh pr ready "$existing_number" --repo "$REPO_SLUG" >/dev/null 2>&1 || true
+            fi
+            echo "url=$existing_url" >> "$GITHUB_OUTPUT"
+            echo "number=$existing_number" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$commit_count" -eq 0 ]; then
+            echo "No commits on working branch — skipping PR creation"
+            echo "url=" >> "$GITHUB_OUTPUT"
+            echo "number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$AGENT_EXIT" = "0" ]; then
+            url=$(gh pr create \
+              --repo "$REPO_SLUG" \
+              --head "$BRANCH_NAME" \
+              --base main \
+              --title "$pr_title" \
+              --body-file /tmp/pr-body.md)
+          else
+            url=$(gh pr create \
+              --repo "$REPO_SLUG" \
+              --head "$BRANCH_NAME" \
+              --base main \
+              --title "$pr_title" \
+              --body-file /tmp/pr-body.md \
+              --draft)
+          fi
+
+          pr_number=$(gh pr view "$url" --repo "$REPO_SLUG" --json number -q .number 2>/dev/null || true)
+          gh pr edit "$pr_number" --repo "$REPO_SLUG" --add-label "type:example" --add-label "automated" >/dev/null 2>&1 || true
           if [ "$needs_creds" = "needs-credentials" ]; then
-            labels="$labels,needs-credentials"
+            gh pr edit "$pr_number" --repo "$REPO_SLUG" --add-label "needs-credentials" >/dev/null 2>&1 || true
           fi
-
-          url=$(gh pr create \
-            --title "$pr_title" \
-            --body-file /tmp/pr-body.md \
-            --base main \
-            --label "$labels" \
-            --draft)
           echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------
-      # 11a. Comment on issue — complete build
+      # 12. Comment on issue with completion / continuation status
       # ------------------------------------------------------------------
       - name: Comment on issue (complete)
-        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '0'
+        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '0' && steps.pr.outputs.url != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
@@ -399,24 +505,27 @@ jobs:
 
           <!-- pr-opened -->"
 
-      # ------------------------------------------------------------------
-      # 11b. Comment on issue — incomplete (draft PR, needs continuation)
-      # ------------------------------------------------------------------
       - name: Comment on issue (incomplete)
-        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '2'
+        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code != '0' && steps.pr.outputs.url != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
-          PR_URL: ${{ steps.draft_pr.outputs.url }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+          AGENT_EXIT: ${{ steps.agent_exit.outputs.code }}
         run: |
           state=$(cat /tmp/agent-state.json 2>/dev/null || echo '{}')
           phases=$(echo "$state" | python3 -c "import json,sys; d=json.load(sys.stdin); print(', '.join(d.get('phases',[])))")
           tests=$(echo "$state" | python3 -c "import json,sys; d=json.load(sys.stdin); print('passing' if d.get('tests_passing') else ('failing' if d.get('tests_failing') else 'not yet run'))")
           turns=$(echo "$state" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('turns_used','?'))")
+          if [ "$AGENT_EXIT" = "2" ]; then
+            intro="⚠️ Build hit the turn limit after ${turns} turns. Draft PR opened: ${PR_URL}"
+          else
+            intro="⚠️ Build stopped before completion, but progress was checkpointed: ${PR_URL}"
+          fi
 
           gh issue comment "$ISSUE_NUMBER" \
             --repo "${{ github.repository }}" \
-            --body "⚠️ Build hit the turn limit after ${turns} turns. Draft PR opened: ${PR_URL}
+            --body "${intro}
 
           **Progress so far:**
           - Phases complete: ${phases:-none}
@@ -427,29 +536,27 @@ jobs:
           <!-- pr-opened -->
           <!-- agent-state: ${state} -->"
 
+      - name: Comment on issue (hard failure without PR)
+        if: steps.issue.outputs.skip != 'true' && steps.agent_exit.outputs.code == '1' && steps.pr.outputs.url == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --body "❌ Build failed before any checkpointed branch/PR could be created. Check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+
       # ------------------------------------------------------------------
       # Cleanup — always remove build:in-progress label
       # ------------------------------------------------------------------
-      - name: Remove build-in-progress label (success)
-        if: steps.issue.outputs.skip != 'true'
+      - name: Remove build-in-progress label
+        if: always() && steps.issue.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue edit ${{ steps.issue.outputs.number }} \
             --repo "${{ github.repository }}" \
             --remove-label "build:in-progress" 2>/dev/null || true
-
-      - name: Remove build-in-progress label and comment (failure)
-        if: failure() && steps.issue.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue edit ${{ steps.issue.outputs.number }} \
-            --repo "${{ github.repository }}" \
-            --remove-label "build:in-progress" 2>/dev/null || true
-          gh issue comment ${{ steps.issue.outputs.number }} \
-            --repo "${{ github.repository }}" \
-            --body "❌ Build failed. Check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
 
 
   # ── Engineering: act on @deepgram-robot mentions anywhere in the repo ────────
@@ -529,11 +636,24 @@ jobs:
           echo "branch=$branch"             >> "$GITHUB_OUTPUT"
           echo "context_type=$context_type" >> "$GITHUB_OUTPUT"
 
+          # Fetch full PR body for context — contains original issue, extra context, agent state
+          if [ "$context_type" = "PR" ]; then
+            pr_body=$(gh pr view "$number" \
+              --repo "${{ github.repository }}" \
+              --json body \
+              -q '.body' 2>/dev/null || echo '')
+          else
+            pr_body=""
+          fi
+          echo "pr_body<<PR_BODY_EOF" >> "$GITHUB_OUTPUT"
+          echo "$pr_body" >> "$GITHUB_OUTPUT"
+          echo "PR_BODY_EOF" >> "$GITHUB_OUTPUT"
+
           # Extract prior agent-state from any hidden comment on this issue/PR
           prior_state=$(gh issue view "$number" \
             --repo "${{ github.repository }}" \
-            --json comments \
-            --jq '[.comments[].body | select(contains("<!-- agent-state:"))] | last' \
+            --json body,comments \
+            --jq '([.body] + [.comments[].body]) | map(select(contains("<!-- agent-state:"))) | last' \
             2>/dev/null | \
             python3 .github/scripts/extract_agent_state.py || true)
           echo "prior_state=$prior_state" >> "$GITHUB_OUTPUT"
@@ -557,44 +677,23 @@ jobs:
       # ------------------------------------------------------------------
       - name: Run engineering agent
         if: steps.auth.outputs.allowed == 'true'
-        uses: anthropics/claude-code-action@39431830520a7ae6c0c572f11a7707e7043325e3 # v1.0.95
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          mode: agent
-          model: claude-opus-4-6
-          allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"
-          timeout_minutes: 55
-          direct_prompt: |
-            @${{ github.event.comment.user.login }} mentioned @deepgram-robot on ${{ steps.ctx.outputs.context_type }} #${{ steps.ctx.outputs.number }}:
-
-            "${{ github.event.comment.body }}"
-
-            ---
-
-            Act on this request. You have full access to the entire repository — read any file, write code, run tests, install dependencies, commit changes, push branches, open or update PRs. Do not hold back capability.
-
-            Context:
-            - Repository: ${{ github.repository }}
-            - ${{ steps.ctx.outputs.context_type }}: #${{ steps.ctx.outputs.number }}
-            - Branch checked out: ${{ steps.ctx.outputs.branch }}
-            - Comment URL: ${{ github.event.comment.html_url }}
-            ${{ steps.ctx.outputs.prior_state != '' && format('
-            Prior build state (skip completed work — go straight to what is missing):
-            ```json
-            {0}
-            ```
-            ', steps.ctx.outputs.prior_state) || '' }}
-
-            When you are done, post a reply comment on #${{ steps.ctx.outputs.number }} summarising what you did (or explaining clearly why you couldn't do it). Use this exact command to post:
-
-            ```bash
-            gh issue comment ${{ steps.ctx.outputs.number }} \
-              --repo ${{ github.repository }} \
-              --body "YOUR REPLY HERE"
-            ```
-
-            ⛔ Never modify anything under .github/, context7.json, or renovate.json — these are infrastructure files that manage the repo itself and must only change through deliberate human commits.
         env:
+          REPO_SLUG: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.ctx.outputs.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+          BRANCH: ${{ steps.ctx.outputs.branch }}
+          PR_BODY: ${{ steps.ctx.outputs.pr_body }}
+          PRIOR_STATE: ${{ steps.ctx.outputs.prior_state }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'anthropic' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || '' }}
           DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set +e
+          python3 .github/scripts/run_engineering_agent.py
+          result=$?
+          exit $result

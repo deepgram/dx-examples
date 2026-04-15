@@ -18,7 +18,7 @@ import re
 import sys
 from pathlib import Path
 
-import anthropic
+from llm import messages_create, response_text
 
 AVAILABLE_SECRET_NAMES = os.environ["SECRET_NAMES"].split(",")
 ISSUE_BODY = os.environ["ISSUE_BODY"]
@@ -72,9 +72,10 @@ def read_existing_examples() -> list[str]:
 
 
 def main() -> None:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-
     existing_examples = read_existing_examples()
+
+    # Planner uses a fast/cheap model — override MODEL for this step
+    plan_model = os.environ.get("LLM_PLAN_MODEL", MODEL)
 
     user_message = f"""
 Issue #{ISSUE_NUMBER}:
@@ -92,14 +93,15 @@ Available secret names:
 Return the JSON plan object.
 """.strip()
 
-    response = client.messages.create(
-        model="claude-haiku-4-5",  # fast and cheap for planning
+    response = messages_create(
+        model=plan_model,
         max_tokens=512,
         system=SYSTEM_PROMPT,
+        tools=[],
         messages=[{"role": "user", "content": user_message}],
     )
 
-    raw = response.content[0].text.strip()
+    raw = response_text(response).strip()
 
     # Strip markdown fences if the model added them anyway
     if raw.startswith("```"):

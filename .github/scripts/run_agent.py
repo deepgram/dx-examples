@@ -8,21 +8,21 @@ is built, tested, and passing. Stops on AGENT_DONE or turn limit.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
 from typing import Any
 
-import anthropic
-
+from llm import client, MODEL, messages_create, response_text, response_stop_reason, wrap_message, wrap_tool_result, extract_blocks
 from agent_state import WorkingMemory, RuleEngine, check_constraints
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-MODEL = "claude-opus-4-5"
+MODEL  # imported from llm.py
 WORKSPACE = Path(os.environ["WORKSPACE_DIR"])  # e.g. /repo/examples/NNN-slug
 EXAMPLE_NUMBER = os.environ["EXAMPLE_NUMBER"]
 EXAMPLE_SLUG = os.environ["EXAMPLE_SLUG"]
@@ -32,9 +32,13 @@ ISSUE_BODY = os.environ["ISSUE_BODY"]
 ISSUE_NUMBER = os.environ["ISSUE_NUMBER"]
 CONTAINER_NAME = f"example-sandbox-{ISSUE_NUMBER}"
 BUILD_LOG = Path(os.environ.get("BUILD_LOG", "/tmp/build-log.md"))
-MAX_TURNS = int(os.environ.get("MAX_TURNS", "75"))
+MAX_TURNS = int(os.environ.get("MAX_TURNS", "150"))
+REPO_ROOT = Path(os.environ.get("REPO_ROOT", str(WORKSPACE.parent.parent)))
+BRANCH_NAME = os.environ.get("BRANCH_NAME", "")
+REPO_SLUG = os.environ.get("REPO_SLUG", "")
+WORKSPACE_SUBDIR = os.environ.get("WORKSPACE_SUBDIR", WORKSPACE.name)
 
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+client  # noqa: F401 — imported for side-effects (provider init in llm.py)
 
 # ---------------------------------------------------------------------------
 # Docker helpers
@@ -122,6 +126,172 @@ def list_files(path: str = ".") -> dict[str, Any]:
         return {"error": f"{path} does not exist"}
     files = [str(p.relative_to(WORKSPACE)) for p in sorted(full.rglob("*")) if p.is_file()]
     return {"files": files}
+
+
+def collect_agent_state(wm: WorkingMemory, turns_used: int) -> dict[str, Any]:
+    phases: list[str] = []
+    files_written: list[str] = []
+    last_test_output = ""
+
+    for (predicate, args), value in wm._facts.items():
+        if predicate == "phase" and args:
+            phases.append(str(args[0]))
+        elif predicate == "file_written" and args:
+            files_written.append(str(args[0]))
+        elif predicate == "last_test_output" and args:
+            last_test_output = str(args[0])
+        elif predicate == "last_test_output" and isinstance(value, str):
+            last_test_output = value
+
+    return {
+        "turns_used": turns_used,
+        "max_turns": MAX_TURNS,
+        "phases": sorted(set(phases)),
+        "tests_passing": bool(wm.query("tests_passing")),
+        "tests_failing": bool(wm.query("tests_failing")),
+        "last_test_output": last_test_output,
+        "files_written": sorted(set(files_written)),
+        "example_number": EXAMPLE_NUMBER,
+        "example_slug": EXAMPLE_SLUG,
+        "workspace_action": WORKSPACE_ACTION,
+        "workspace_subdir": WORKSPACE_SUBDIR,
+        "docker_image": DOCKER_IMAGE,
+    }
+
+
+def clean_workspace_artifacts() -> None:
+    for cache_dir in list(WORKSPACE.rglob("__pycache__")):
+        if cache_dir.is_dir():
+            shutil.rmtree(cache_dir, ignore_errors=True)
+    for cache_file in list(WORKSPACE.rglob("*.pyc")):
+        cache_file.unlink(missing_ok=True)
+    for trash in [".pytest_cache", ".DS_Store"]:
+        target = WORKSPACE / trash
+        if target.is_dir():
+            shutil.rmtree(target, ignore_errors=True)
+        elif target.exists():
+            target.unlink(missing_ok=True)
+
+
+def checkpoint_progress(wm: WorkingMemory, turn: int, reason: str = "checkpoint") -> None:
+    if not BRANCH_NAME:
+        return
+
+    workspace_rel = WORKSPACE.relative_to(REPO_ROOT)
+    state = collect_agent_state(wm, turn)
+    Path("/tmp/agent-state.json").write_text(json.dumps(state, indent=2))
+    clean_workspace_artifacts()
+
+    # The sandbox container runs as root; reclaim ownership before touching git.
+    subprocess.run(
+        ["sudo", "chown", "-R", f"{os.getuid()}:{os.getgid()}", str(WORKSPACE)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    status = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "status", "--porcelain", "--", str(workspace_rel)],
+        capture_output=True,
+        text=True,
+    )
+    if not status.stdout.strip():
+        return
+
+    subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "add", str(workspace_rel)],
+        check=True,
+    )
+
+    cached_diff = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "diff", "--cached", "--quiet", "--", str(workspace_rel)],
+        capture_output=True,
+        text=True,
+    )
+    if cached_diff.returncode == 0:
+        return
+
+    commit_message = (
+        f"chore(examples): checkpoint {WORKSPACE_SUBDIR} turn {turn}\n\n"
+        f"Relates to #{ISSUE_NUMBER}"
+    )
+    commit = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "commit", "-m", commit_message],
+        capture_output=True,
+        text=True,
+    )
+    if commit.returncode != 0:
+        output = (commit.stdout + commit.stderr).lower()
+        if "nothing to commit" in output:
+            return
+        log(f"Checkpoint commit failed during {reason}: {(commit.stderr or commit.stdout)[:400]}", level="error")
+        return
+
+    push = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "push", "origin", f"HEAD:{BRANCH_NAME}"],
+        capture_output=True,
+        text=True,
+    )
+    if push.returncode != 0:
+        subprocess.run(["git", "-C", str(REPO_ROOT), "fetch", "origin", BRANCH_NAME], check=False)
+        rebase = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rebase", f"origin/{BRANCH_NAME}"],
+            capture_output=True,
+            text=True,
+        )
+        if rebase.returncode != 0:
+            log(f"Checkpoint rebase failed during {reason}: {(rebase.stderr or rebase.stdout)[:400]}", level="error")
+            return
+        retry = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "push", "origin", f"HEAD:{BRANCH_NAME}"],
+            capture_output=True,
+            text=True,
+        )
+        if retry.returncode != 0:
+            log(f"Checkpoint push failed during {reason}: {(retry.stderr or retry.stdout)[:400]}", level="error")
+            return
+
+    if REPO_SLUG and os.environ.get("GH_TOKEN"):
+        existing_pr = subprocess.run(
+            [
+                "gh", "pr", "list",
+                "--repo", REPO_SLUG,
+                "--head", BRANCH_NAME,
+                "--state", "open",
+                "--json", "url",
+                "-q", ".[0].url",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if not existing_pr.stdout.strip():
+            title_prefix = "update" if WORKSPACE_ACTION == "modify" else "add"
+            hidden_state = json.dumps(state, separators=(",", ":"))
+            body = (
+                f"Part of #{ISSUE_NUMBER} — build in progress.\n\n"
+                f"> WIP checkpoint created automatically after turn {turn}.\n\n"
+                f"Comment `@deepgram-robot continue` to resume from the current state.\n\n"
+                f"<!-- agent-state: {hidden_state} -->"
+            )
+            create_pr = subprocess.run(
+                [
+                    "gh", "pr", "create",
+                    "--repo", REPO_SLUG,
+                    "--head", BRANCH_NAME,
+                    "--base", "main",
+                    "--title", f"feat(examples): {title_prefix} {WORKSPACE_SUBDIR} [WIP]",
+                    "--body", body,
+                    "--draft",
+                    "--label", "type:example",
+                    "--label", "automated",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if create_pr.returncode == 0:
+                log(f"Opened draft PR from checkpoint turn {turn}", level="system")
+
+    log(f"Checkpointed progress at turn {turn} ({reason})", level="system")
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +419,9 @@ if ! command -v deepgram &> /dev/null; then
   curl -fsSL https://raw.githubusercontent.com/deepgram/deepgram-cli/main/install.sh | sh
 fi
 
-# context7 CLI (npx-based, no install needed but ensure node is present)
+# LLM provider clients — install all since provider is a runtime config knob
+pip install anthropic openai google-genai --quiet 2>/dev/null || true
+
 # Playwright (Python)
 pip install playwright --quiet 2>/dev/null || true
 playwright install chromium --with-deps 2>/dev/null || true
@@ -395,36 +567,15 @@ def run_agent() -> None:
             log(msg, level="error")
             with BUILD_LOG.open("a") as f:
                 f.write(f"\n---\n\n## ⚠️ Turn limit reached\n\n{msg}\n")
-            # Write machine-readable state so a continuation run can skip
-            # completed work. The workflow reads this and embeds it in the
-            # draft PR / issue comment as a hidden <!-- agent-state --> block.
-            state = {
-                "turns_used": turn - 1,
-                "max_turns": MAX_TURNS,
-                "phases": sorted(
-                    args[0]
-                    for (pred, args) in wm._facts.items()
-                    if pred == "phase"
-                ),
-                "tests_passing": bool(wm.query("tests_passing")),
-                "tests_failing": bool(wm.query("tests_failing")),
-                "last_test_output": wm.query("last_test_output", ()) or "",
-                "files_written": sorted(
-                    args[0]
-                    for (pred, args) in wm._facts.items()
-                    if pred == "file_written"
-                ),
-                "example_number": EXAMPLE_NUMBER,
-                "example_slug": EXAMPLE_SLUG,
-                "workspace_action": WORKSPACE_ACTION,
-                "docker_image": DOCKER_IMAGE,
-            }
-            Path("/tmp/agent-state.json").write_text(json.dumps(state, indent=2))
+            Path("/tmp/agent-state.json").write_text(
+                json.dumps(collect_agent_state(wm, turn - 1), indent=2)
+            )
+            checkpoint_progress(wm, turn - 1, reason="turn-limit")
             sys.exit(2)  # 2 = incomplete (not error) — workflow opens draft PR
 
         log(f"Turn {turn}/{MAX_TURNS} — {wm.summary()}")
 
-        response = client.messages.create(
+        response = messages_create(
             model=MODEL,
             max_tokens=8096,
             system=system_prompt,
@@ -432,16 +583,24 @@ def run_agent() -> None:
             messages=messages,
         )
 
-        # Append assistant response to history
-        messages.append({"role": "assistant", "content": response.content})
+        blocks = extract_blocks(response)
+        stop_reason = response_stop_reason(response)
+
+        messages.append(wrap_message("assistant", blocks))
+
+        text_content = response_text(response)
 
         # ----------------------------------------------------------------
-        # AGENT_DONE detection — symbolic constraint check before accepting
+        # AGENT_CHECKPOINT detection — commit progress and open draft PR early
         # ----------------------------------------------------------------
-        agent_done = any(
-            block.type == "text" and "AGENT_DONE" in block.text
-            for block in response.content
-        )
+        agent_checkpoint = "AGENT_CHECKPOINT" in text_content
+        if agent_checkpoint:
+            checkpoint_progress(wm, turn, reason="milestone")
+            messages.append({"role": "user", "content": "Checkpoint noted. Continue working."})
+            continue
+
+        agent_done = "AGENT_DONE" in text_content
+
         if agent_done:
             violations = check_constraints(WORKSPACE)
             if violations:
@@ -462,13 +621,14 @@ def run_agent() -> None:
                 messages.append({"role": "user", "content": constraint_msg})
                 continue
             else:
+                checkpoint_progress(wm, turn, reason="complete")
                 log(f"Agent signalled completion after {turn} turns — constraints verified ✓")
                 return
 
         # ----------------------------------------------------------------
         # end_turn without AGENT_DONE — evaluate rules, prompt to continue
         # ----------------------------------------------------------------
-        if response.stop_reason == "end_turn":
+        if stop_reason == "end_turn":
             log("Agent stopped without AGENT_DONE — prompting to continue", level="error")
             firings = engine.evaluate([])
             rule_injections = (
@@ -484,8 +644,8 @@ def run_agent() -> None:
             })
             continue
 
-        if response.stop_reason != "tool_use":
-            log(f"Unexpected stop reason: {response.stop_reason}", level="error")
+        if stop_reason not in ("tool_use", "TOOL_CALLS"):
+            log(f"Unexpected stop reason: {stop_reason}", level="error")
             break
 
         # ----------------------------------------------------------------
@@ -493,22 +653,31 @@ def run_agent() -> None:
         # ----------------------------------------------------------------
         tool_results = []
         raw_results: list[dict] = []
+        first_write_checkpointed = False
 
-        for block in response.content:
-            if block.type != "tool_use":
+        for block in blocks:
+            if block.get("type") != "tool_use" and not isinstance(block.get("type"), str):
                 continue
-            result_str = dispatch_tool(block.name, block.input)
+            block_type = block.get("type") if isinstance(block.get("type"), str) else ""
+            if block_type != "tool_use":
+                continue
+            name = block.get("name", "")
+            tool_input = block.get("input", {})
+            block_id = block.get("id", "")
+            result_str = dispatch_tool(name, tool_input)
             result_dict = json.loads(result_str)
 
             # Update symbolic working memory
-            wm.update_from_tool_result(block.name, block.input, result_dict)
+            wm.update_from_tool_result(name, tool_input, result_dict)
             raw_results.append(result_dict)
 
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": result_str,
-            })
+            # Checkpoint immediately after first write_file in the turn —
+            # opens draft PR on first meaningful progress, not after the full turn.
+            if not first_write_checkpointed and name == "write_file":
+                checkpoint_progress(wm, turn, reason="first-write")
+                first_write_checkpointed = True
+
+            tool_results.append(wrap_tool_result(block_id, result_str))
 
         # ----------------------------------------------------------------
         # Forward-chain rules over this turn's results
@@ -520,7 +689,8 @@ def run_agent() -> None:
             log(f"Rules fired: {[f.rule_id for f in firings]}", level="system")
             tool_results.append({"type": "text", "text": rule_text})
 
-        messages.append({"role": "user", "content": tool_results})
+        checkpoint_progress(wm, turn, reason="turn")
+        messages.append(wrap_message("user", tool_results))
 
 
 # ---------------------------------------------------------------------------

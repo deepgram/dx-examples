@@ -112,9 +112,24 @@ The blog post should be good enough to publish as-is on a developer blog.
 If the example has any UI component (browser app, terminal output that a user would see, dashboard, chat interface) **and** Playwright is available:
 
 1. Start the example application in the background
-2. Use Playwright to navigate to it and take a screenshot at **1240×760** pixels
-3. Save it as `screenshot.png` in the example root directory
+2. Use Playwright **directly** — do NOT write a separate script. Use Python's `playwright.sync_api` inline in a `run_command` call, or a one-liner like:
+
+   ```bash
+   python3 -c "
+   from playwright.sync_api import sync_playwright
+   with sync_playwright() as p:
+       browser = p.chromium.launch()
+       page = browser.new_page(viewport={'width': 1240, 'height': 760})
+       page.goto('http://localhost:PORT')
+       page.screenshot(path='/workspace/screenshot.png')
+       browser.close()
+   "
+   ```
+
+3. Save as `screenshot.png` in the example root directory
 4. Embed it in README.md near the top
+
+**Do not create a separate screenshot script file.** Take the screenshot inline using `run_command` with an inline Python/JS snippet. Delete any temporary screenshot script after use.
 
 For terminal-only examples that produce meaningful output, use `script` or similar to capture terminal output, save as a text file, or skip the screenshot — don't force a screenshot where it doesn't make sense.
 
@@ -153,6 +168,8 @@ Every single one of these must be true before you output `AGENT_DONE`:
 - [ ] No secrets are hardcoded anywhere
 
 Do not output `AGENT_DONE` until every item above is checked. If tests are failing, keep working. If something is partially implemented, finish it.
+
+When you reach a meaningful milestone — e.g. core logic written, tests written, README drafted, screenshot taken, etc. — output `AGENT_CHECKPOINT` on its own line. The system will commit your progress and open a draft PR immediately so work is never lost.
 
 When all of the above are true, output the following and nothing else:
 

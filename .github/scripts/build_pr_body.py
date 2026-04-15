@@ -5,6 +5,8 @@ build_pr_body.py
 Generates a clean PR body for an auto-built example:
   - Short summary (action, runtime, example, turn count)
   - Verbatim test files from the workspace
+  - Test output from the build log
+  - <!-- extra context --> section with original issue body (for re-runs)
   - Prints "needs-credentials" to stdout if any test checks for missing
     credentials (i.e. has an exit-2 path), so the workflow can apply the label
 
@@ -16,6 +18,7 @@ Usage:
   python3 .github/scripts/build_pr_body.py \\
     --workspace WORKSPACE_DIR \\
     --issue ISSUE_NUMBER \\
+    --issue-body "..." \\
     --action new|modify \\
     --runtime python \\
     --example 540-livekit-voice-agent-python \\
@@ -77,10 +80,39 @@ def needs_credentials(test_files: list[tuple[str, str]]) -> bool:
     return False
 
 
+def extract_test_output(build_log: Path) -> str:
+    """Pull test results and key output from the build log."""
+    if not build_log.exists():
+        return "_No build log found._"
+
+    text = build_log.read_text(errors="ignore")
+    output_lines = []
+
+    # Pull test exit codes and output
+    for line in text.splitlines():
+        lower = line.lower()
+        if any(k in lower for k in ["exit", "test", "pass", "fail", "error", "pytest", "running"]):
+            output_lines.append(line)
+
+    if not output_lines:
+        return "_No test output found in build log._"
+
+    # Collapse long runs
+    result = []
+    for line in output_lines[:100]:
+        result.append(line)
+    if len(output_lines) > 100:
+        result.append(f"\n_... ({len(output_lines) - 100} more lines in build log)_\n")
+
+    return "\n".join(result)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace", required=True)
     parser.add_argument("--issue", required=True)
+    parser.add_argument("--issue-body", required=True,
+                        help="Full body of the originating issue")
     parser.add_argument("--action", required=True)
     parser.add_argument("--runtime", required=True)
     parser.add_argument("--example", required=True)
@@ -94,6 +126,7 @@ def main() -> None:
 
     summary = extract_build_summary(build_log)
     test_files = collect_test_files(workspace)
+    test_output = extract_test_output(build_log)
     apply_needs_credentials = needs_credentials(test_files)
 
     lines = []
@@ -120,12 +153,19 @@ def main() -> None:
             ext = Path(rel_path).suffix.lstrip(".")
             lines.append(f"### `{rel_path}`\n")
             lines.append(f"```{ext}\n{content}\n```\n")
+        lines.append(f"### Test output\n\n```\n{test_output}\n```\n")
     else:
         lines.append("---\n")
         lines.append("## Tests\n\n_No test files found._\n")
 
+    lines.append("---\n")
+    lines.append("<!-- extra-context -->\n")
+    lines.append("<!--\n")
+    lines.append(f"ORIGINAL ISSUE #{args.issue}:\n")
+    lines.append(f"{args.issue_body.strip()}\n")
+    lines.append("-->\n")
+
     if apply_needs_credentials:
-        lines.append("---\n")
         lines.append(
             "> **needs-credentials** — one or more tests exit 2 when credentials "
             "are missing. Add the required secrets to the repository to enable "
