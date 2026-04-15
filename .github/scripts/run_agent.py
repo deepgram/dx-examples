@@ -176,7 +176,10 @@ def clean_workspace_artifacts() -> None:
         if cache_dir.is_dir():
             shutil.rmtree(cache_dir, ignore_errors=True)
     for cache_file in list(WORKSPACE.rglob("*.pyc")):
-        cache_file.unlink(missing_ok=True)
+        try:
+            cache_file.unlink(missing_ok=True)
+        except PermissionError:
+            pass
     for trash in [".pytest_cache", ".DS_Store"]:
         target = WORKSPACE / trash
         if target.is_dir():
