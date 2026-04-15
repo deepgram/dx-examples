@@ -1,6 +1,8 @@
 const { Deepgram } = require('@deepgram/sdk');
-const { connect } = require('livekit-server-sdk');
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+// Load environment variables from .env file
+dotenv.config();
 
 function testEnvironmentVariables() {
   if (!process.env.DEEPGRAM_API_KEY || !process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_HOST) {
@@ -11,11 +13,11 @@ function testEnvironmentVariables() {
 
 async function testDeepgramAPI() {
   try {
-    const deepgram = new Deepgram(process.env.DEEPGRAM_API_KEY);
+    const deepgram = new Deepgram({apiKey: process.env.DEEPGRAM_API_KEY});
     const result = await deepgram.transcription.preRecorded({
       url: 'https://static.deepgram.com/examples/Bueller-Life-moves-pretty-fast.wav'
     });
-    if (result) {
+    if (result && result.results) {
       console.log('Deepgram API test passed.');
     } else {
       throw new Error('Failed to get transcription result.');
@@ -40,6 +42,11 @@ async function testLivekitConnection() {
   }
 }
 
-testEnvironmentVariables();
-testDeepgramAPI();
-testLivekitConnection();
+// Run tests
+function runTests() {
+  testEnvironmentVariables();
+  testDeepgramAPI();
+  testLivekitConnection();
+}
+
+runTests();
