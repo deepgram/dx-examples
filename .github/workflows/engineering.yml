@@ -51,6 +51,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0  # Full clone so feature branches are available for checkout
 
       # ------------------------------------------------------------------
       # 1. Resolve which issue to work on
@@ -664,7 +666,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ steps.ctx.outputs.branch }}
-          fetch-depth: 0
+          fetch-depth: 0  # Full clone so the target branch is available
 
       - name: Configure git
         if: steps.auth.outputs.allowed == 'true'
