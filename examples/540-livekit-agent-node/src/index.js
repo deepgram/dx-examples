@@ -5,20 +5,20 @@ const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 
-const deepgram = new Deepgram(DEEPGRAM_API_KEY);
+const deepgram = new Deepgram({ apiKey: DEEPGRAM_API_KEY });
 
 const main = async () => {
   console.log('Initializing LiveKit Agent with Deepgram...');
-  // Here you would add logic for interacting with LiveKit, potentially creating rooms, starting sessions, etc.
-  // Using deepgram for STT during a live call or session
+  // Logic for interacting with LiveKit
+
+  // Using Deepgram for STT during a live call or session
   try {
-    const response = await deepgram.transcription.live({
-      // Placeholder audio socket connection
-      url: 'wss://livekit.example.com/socket',
+    const response = await deepgram.transcription.preRecorded({
+      url: 'https://static.deepgram.com/examples/Bueller-Life-moves-pretty-fast.wav'
     });
     console.log('Deepgram Response:', response);
   } catch (err) {
-    console.error('There was an error with Deepgram:', err);
+    console.error('Error with Deepgram:', err);
   }
 
   // LiveKit JWT generation logic
