@@ -305,6 +305,7 @@ jobs:
           BUILD_LOG: /tmp/build-log.md
           MAX_TURNS: "150"
           PRIOR_STATE: ${{ steps.issue.outputs.prior_state }}
+          PYTHONDONTWRITEBYTECODE: "1"
         run: |
           set +e
           # Strip bytecode from previous runs — stale __pycache__ causes permission errors
