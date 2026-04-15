@@ -15,7 +15,7 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-from llm import MODEL, messages_create, response_text, response_stop_reason, extract_blocks
+from llm import MODEL, messages_create, response_text, response_stop_reason, extract_blocks, wrap_message
 from agent_state import WorkingMemory, RuleEngine, check_constraints
 
 # ---------------------------------------------------------------------------
