@@ -44,6 +44,20 @@ WORKSPACE_SUBDIR = os.environ.get("WORKSPACE_SUBDIR", WORKSPACE.name)
 
 def start_container() -> None:
     """Start the sandbox container with workspace mounted and env file injected."""
+    # Append workflow-level env vars that aren't in the sandbox env file.
+    # These are set directly in the workflow (e.g. LLM_API_KEY, OPENAI_API_KEY)
+    # and need to be available inside Docker for the build agent and the example.
+    workflow_envs = [
+        "LLM_API_KEY",
+        "OPENAI_API_KEY",
+        "LLM_BASE_URL",
+        "LLM_MODEL",
+    ]
+    with open("/tmp/sandbox.env", "a") as f:
+        for key in workflow_envs:
+            val = os.environ.get(key)
+            if val:
+                f.write(f"{key}={val}\n")
     subprocess.run([
         "docker", "run", "-d",
         "--name", CONTAINER_NAME,
