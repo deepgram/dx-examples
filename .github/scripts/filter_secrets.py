@@ -32,9 +32,17 @@ def main() -> None:
     for key, value in secrets.items():
         if key not in required:
             continue
-        # Escape newlines — env files don't support multiline values
         safe_value = str(value).replace("\n", "\\n").replace("\r", "")
         print(f"{key}={safe_value}")
+        written += 1
+
+        if key == "LLM_API_KEY":
+            print(f"OPENAI_API_KEY={safe_value}")
+            written += 1
+
+    if "OPENAI_API_KEY" in required and "LLM_API_KEY" in secrets and "OPENAI_API_KEY" not in secrets:
+        safe_value = str(secrets["LLM_API_KEY"]).replace("\n", "\\n").replace("\r", "")
+        print(f"OPENAI_API_KEY={safe_value}")
         written += 1
 
     missing = required - set(secrets.keys())

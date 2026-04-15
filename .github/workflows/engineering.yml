@@ -287,6 +287,7 @@ jobs:
         continue-on-error: true
         env:
           LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || 'https://api.openai.com/v1' }}
           LLM_MODEL: ${{ secrets.LLM_MODEL || 'gpt-5.4' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
