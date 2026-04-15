@@ -217,10 +217,54 @@ def extract_blocks(response: dict) -> list:
 
 
 def wrap_message(role: str, content) -> dict:
-    if isinstance(content, list):
+    if not isinstance(content, list):
         return {"role": role, "content": content}
-    return {"role": role, "content": content}
+
+    msg = {"role": role}
+    text_parts = []
+    tool_results = []
+    tool_calls = []
+
+    for item in content:
+        if isinstance(item, dict):
+            item_type = item.get("type", "")
+            if item_type == "text":
+                text_parts.append(item["text"])
+            elif item_type == "tool_result":
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_call_id": item["tool_call_id"],
+                    "content": item["content"],
+                })
+            elif item_type == "tool_use":
+                args = item["input"]
+                if isinstance(args, str):
+                    args_json = args
+                else:
+                    args_json = json.dumps(args)
+                tool_calls.append({
+                    "id": item["id"],
+                    "type": "function",
+                    "function": {
+                        "name": item["name"],
+                        "arguments": args_json,
+                    },
+                })
+        else:
+            text_parts.append(str(item))
+
+    if text_parts and not tool_calls and not tool_results:
+        msg["content"] = "\n".join(text_parts)
+    elif text_parts or tool_results:
+        msg["content"] = (
+            [{"type": "text", "text": p} for p in text_parts if p]
+            + tool_results
+        )
+    if tool_calls:
+        msg["tool_calls"] = tool_calls
+
+    return msg
 
 
-def wrap_tool_result(tool_use_id: str, content: str) -> dict:
-    return {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
+def wrap_tool_result(tool_call_id: str, content: str) -> dict:
+    return {"tool_call_id": tool_call_id, "content": content}
