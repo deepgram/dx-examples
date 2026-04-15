@@ -600,16 +600,6 @@ def run_agent() -> None:
 
         messages.append(wrap_message("assistant", blocks))
 
-        # Truncate history to prevent context overflow — keep last 20 messages
-        # plus the initial context. But don't orphan tool_results: OpenAI requires
-        # every role=tool message to match a preceding assistant tool_calls.
-        if len(messages) > 21:
-            kept = [messages[0]] + messages[-20:]
-            # Strip trailing tool result messages whose parent assistant was cut
-            while kept and kept[-1].get("role") == "tool":
-                kept.pop()
-            messages = kept
-
         text_content = response_text(response)
 
         # ----------------------------------------------------------------
@@ -716,6 +706,13 @@ def run_agent() -> None:
             messages.append({"role": "user", "content": [{"type": "text", "text": rule_text}]})
 
         checkpoint_progress(wm, turn, reason="turn")
+
+        # Truncate history AFTER all tool results are added to prevent orphaning.
+        # OpenAI requires every role=tool message to have a preceding assistant
+        # message with matching tool_calls. Truncating here (end of turn, after all
+        # processing) ensures complete tool call rounds are always kept intact.
+        if len(messages) > 21:
+            messages = [messages[0]] + messages[-20:]
 
 
 # ---------------------------------------------------------------------------
