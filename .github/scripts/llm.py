@@ -79,7 +79,7 @@ def messages_create(
 
     payload = {
         "model": model,
-        "max_tokens": max_tokens,
+        "max_completion_tokens": max_tokens,
         "messages": [{"role": "system", "content": system}] + messages,
     }
     if tools:
