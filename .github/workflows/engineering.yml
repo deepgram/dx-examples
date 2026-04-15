@@ -186,12 +186,9 @@ jobs:
         id: plan
         if: steps.issue.outputs.skip != 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'anthropic' }}
-          LLM_MODEL: ${{ secrets.LLM_MODEL || '' }}
-          LLM_PLAN_MODEL: ${{ secrets.LLM_PLAN_MODEL || '' }}
+          LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || 'https://api.openai.com/v1' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || 'gpt-5.4' }}
           ISSUE_BODY: ${{ steps.issue.outputs.body }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           EXAMPLE_NUMBER: ${{ steps.example_number.outputs.number }}
@@ -289,11 +286,9 @@ jobs:
         if: steps.issue.outputs.skip != 'true'
         continue-on-error: true
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'anthropic' }}
-          LLM_MODEL: ${{ secrets.LLM_MODEL || '' }}
+          LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || 'https://api.openai.com/v1' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || 'gpt-5.4' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_BODY: ${{ steps.issue.outputs.body }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
@@ -686,12 +681,10 @@ jobs:
           PR_BODY: ${{ steps.ctx.outputs.pr_body }}
           PRIOR_STATE: ${{ steps.ctx.outputs.prior_state }}
           COMMENT_URL: ${{ github.event.comment.html_url }}
-          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'anthropic' }}
-          LLM_MODEL: ${{ secrets.LLM_MODEL || '' }}
+          LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || 'https://api.openai.com/v1' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || 'gpt-5.4' }}
           DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set +e
           python3 .github/scripts/run_engineering_agent.py
