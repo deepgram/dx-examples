@@ -15,7 +15,7 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-from llm import MODEL, messages_create, response_text, response_stop_reason, wrap_message, wrap_tool_result, extract_blocks
+from llm import MODEL, messages_create, response_text, response_stop_reason, extract_blocks
 from agent_state import WorkingMemory, RuleEngine, check_constraints
 
 # ---------------------------------------------------------------------------
@@ -649,7 +649,6 @@ def run_agent() -> None:
         # ----------------------------------------------------------------
         # Process tool calls — update working memory after each dispatch
         # ----------------------------------------------------------------
-        tool_results = []
         raw_results: list[dict] = []
         first_write_checkpointed = False
 
@@ -675,20 +674,24 @@ def run_agent() -> None:
                 checkpoint_progress(wm, turn, reason="first-write")
                 first_write_checkpointed = True
 
-            tool_results.append(wrap_tool_result(block_id, result_str))
+            # OpenAI Chat Completions: role=tool, not in content array
+            messages.append({
+                "role": "tool",
+                "tool_call_id": block_id,
+                "content": result_str,
+            })
 
         # ----------------------------------------------------------------
         # Forward-chain rules over this turn's results
-        # Inject firing messages as a text block after tool_results
+        # Inject firing messages as a text block
         # ----------------------------------------------------------------
         firings = engine.evaluate(raw_results)
         if firings:
             rule_text = "\n".join(f.message for f in firings)
             log(f"Rules fired: {[f.rule_id for f in firings]}", level="system")
-            tool_results.append({"type": "text", "text": rule_text})
+            messages.append({"role": "user", "content": [{"type": "text", "text": rule_text}]})
 
         checkpoint_progress(wm, turn, reason="turn")
-        messages.append(wrap_message("user", tool_results))
 
 
 # ---------------------------------------------------------------------------
