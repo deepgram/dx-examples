@@ -267,4 +267,4 @@ def wrap_message(role: str, content) -> dict:
 
 
 def wrap_tool_result(tool_call_id: str, content: str) -> dict:
-    return {"tool_call_id": tool_call_id, "content": content}
+    return {"type": "tool_result", "tool_call_id": tool_call_id, "content": content}
