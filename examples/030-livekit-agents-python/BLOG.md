@@ -1,111 +1,117 @@
-# Building a Real-Time Voice AI Assistant with LiveKit and Deepgram
+# Building a Voice Assistant using LiveKit Agents and Deepgram
 
-In this guide, we'll walk through building a voice AI assistant using LiveKit's agent framework alongside Deepgram for speech-to-text (STT), OpenAI for generating responses, and Cartesia for text-to-speech (TTS). This tutorial assumes familiarity with Python programming and basic understanding of real-time communication concepts.
+Integrating powerful voice technologies can completely transform how users interact with your applications. This guide will walk you through setting up a minimal yet effective voice assistant using LiveKit Agents, Deepgram for speech-to-text (STT), and OpenAI's GPT for generating responses.
 
-## Prerequisites
+## Why LiveKit Agents?
 
-1. **Accounts and Keys Required:**
-   - **Deepgram Account:** Obtain a free API key from the [Deepgram Console](https://console.deepgram.com/).
-   - **LiveKit Account:** You can use LiveKit Cloud or self-host your own instance. Sign up at [LiveKit Cloud](https://cloud.livekit.io/).
-   - **OpenAI Account:** Get an API key from the [OpenAI Dashboard](https://platform.openai.com/api-keys).
+LiveKit Agents provide a comprehensive platform for managing real-time audio and video communication. By combining it with Deepgram, you can easily add sophisticated STT capabilities to create a seamless voice interaction experience.
 
-2. **Environment Setup:** Ensure you have Python 3.10+ installed on your system. You can verify this with:
-   ```bash
-   python --version
-   ```
+## Setting Up the Environment
 
-3. **Dependencies Installation:**
-   We'll be using various Python libraries, so make sure to install the required packages listed in `requirements.txt`:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Prerequisites
 
-## Environment Configuration
+- **Python 3.8+**: Make sure your system is running Python 3.8 or later.
+- **LiveKit Server**: Deploy a LiveKit server or use a hosted version.
+- **API Keys**: Obtain API keys from Deepgram and OpenAI.
 
-Before you start coding, set up your environment variables. Create a `.env` file in the project root by copying `.env.example` and filling in your credentials:
+### Environment Variables
 
-```env
-DEEPGRAM_API_KEY=your_deepgram_api_key
-LIVEKIT_URL=your_livekit_url
-LIVEKIT_API_KEY=your_livekit_api_key
-LIVEKIT_API_SECRET=your_livekit_secret
-OPENAI_API_KEY=your_openai_api_key
+To facilitate secure and flexible configuration, store your credentials in environment variables. Create a `.env` file in your project root with the following:
+
+```ini
+# LiveKit
+LIVEKIT_URL=<your_livekit_url>
+LIVEKIT_API_KEY=<your_livekit_api_key>
+LIVEKIT_API_SECRET=<your_livekit_api_secret>
+
+# Deepgram
+DEEPGRAM_API_KEY=<your_deepgram_api_key>
+
+# OpenAI
+OPENAI_API_KEY=<your_openai_api_key>
 ```
 
-## Building the Voice Assistant
+## Developing the Voice Assistant
 
-### 1. Define the Agent Class
+### 1. Install Dependencies
 
-Start by defining a custom `VoiceAssistant` class that inherits from the `Agent` base class:
+Ensure your project has the necessary Python packages. Create a `requirements.txt` file and include:
+
+```plaintext
+livekit
+livekit-plugins-deepgram
+openai
+python-dotenv
+```
+
+Install the dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Writing the Agent Code
+
+We start by constructing a minimal agent. Open `agent.py` and import the necessary packages:
+
+```python
+import logging
+from livekit.agents import Agent, AgentServer, cli, inference
+from livekit.plugins.turn_detector.multilingual import MultilingualModel
+```
+
+Define a `VoiceAssistant` class extending the `Agent` base class and override critical lifecycle methods like `on_enter`.
 
 ```python
 class VoiceAssistant(Agent):
-    """Minimal Voice Assistant built with LiveKit and Deepgram STT."""
-
     def __init__(self) -> None:
         super().__init__(
-            instructions=(
-                "You are a friendly voice assistant powered by Deepgram "
-                "speech-to-text and LiveKit. Keep answers concise and "
-                "conversational."
-            ),
+            instructions="You are a voice assistant..."
         )
 
     async def on_enter(self) -> None:
-        self.session.generate_reply(
-            instructions="Greet the user warmly and ask how you can help."
-        )
+        self.session.generate_reply("Greet the user...")
 ```
 
-### 2. Setup the LiveKit Server
+### 3. Configure the Server and Session
 
-Initialize an `AgentServer` and configure it to use plugins for STT, LLM (language model), and TTS:
+Initialize an `AgentServer` and define the session using Deepgram for STT and OpenAI for LLM:
 
 ```python
 server = AgentServer()
 
-def prewarm(proc: JobProcess) -> None:
-    proc.userdata["vad"] = silero.VAD.load()
-
-server.setup_fnc = prewarm
-
 @server.rtc_session()
-async def entrypoint(ctx: JobContext) -> None:
-    ctx.log_context_fields = {"room": ctx.room.name}
+async def entrypoint(ctx):
     session = AgentSession(
         stt=inference.STT("deepgram/nova-3", language="multi"),
         llm=inference.LLM("openai/gpt-4.1-mini"),
-        tts=inference.TTS(
-            "cartesia/sonic-3",
-            voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
-        ),
-        vad=ctx.proc.userdata["vad"],
+        tts=inference.TTS("cartesia/sonic-3"),
         turn_detection=MultilingualModel(),
         preemptive_generation=True,
     )
-    await session.start(
-        agent=VoiceAssistant(),
-        room=ctx.room,
-    )
-    await ctx.connect()
+    await session.start(agent=VoiceAssistant(), room=ctx.room)
 ```
 
-### 3. Running the Example
+### 4. Running Your Agent
 
-You can run your assistant in console mode to interact through your terminal:
+Run your agent script to start:
 
 ```bash
-python src/agent.py console
+python src/agent.py
 ```
 
-Alternatively, deploy as a dev worker to connect to your LiveKit server:
+Join the LiveKit room specified in your setup to interact with the assistant.
 
-```bash
-python src/agent.py dev
-```
+## Conclusion
 
-## Final Thoughts
+This example demonstrates how LiveKit Agents integrate seamlessly with Deepgram and OpenAI to power a real-time voice assistant. Experiment by modifying the assistant's behavior or trying different models and configurations.
 
-This basic setup allows you to run a real-time conversational agent using Python. The integration showcase here with LiveKit and Deepgram can be enhanced with custom logic and additional plugins for more advanced use cases.
+## What's Next?
 
-For further extensions, consider different models available in the Deepgram and OpenAI ecosystems or explore additional plugins available in the LiveKit framework. Happy coding!
+- **Explore More Models**: Try different STT and LLM models to see how they change user interactions.
+- **Integrate More Features**: Add more sophisticated logic or memory to your assistant for enhanced user experiences.
+- **Deploy**: Consider deploying your solution in a production environment for real-world interactions.
+
+---
+
+Leverage the power of voice in your applications with LiveKit and Deepgram for deep transformation of user interactions.
