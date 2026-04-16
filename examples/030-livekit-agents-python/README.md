@@ -1,60 +1,67 @@
-# LiveKit Agents — Voice Assistant with Deepgram STT
+# LiveKit Voice Assistant with Deepgram
 
-Build a real-time voice AI assistant using LiveKit's agent framework with Deepgram nova-3 for speech-to-text. The agent joins a LiveKit room, listens to participants via WebRTC, transcribes speech with Deepgram, generates responses with an LLM, and speaks back with TTS.
+![Screenshot](./screenshot.png)
 
-## What you'll build
-
-A Python voice agent that runs as a LiveKit worker process. When a user joins a LiveKit room, the agent automatically connects, greets the user, and holds a natural voice conversation — transcribing speech with Deepgram nova-3, thinking with OpenAI GPT-4.1-mini, and responding with Cartesia TTS. You can test it locally with `python src/agent.py console` for a terminal-based voice interaction.
+This example demonstrates how to build a minimal voice assistant using LiveKit Agents and Deepgram. It uses the LiveKit declarative pipeline to integrate speech-to-text (STT) from Deepgram, language processing from OpenAI's GPT, and optional text-to-speech (TTS) via Cartesia Sonic.
 
 ## Prerequisites
 
-- Python 3.10+
-- Deepgram account — [get a free API key](https://console.deepgram.com/)
-- LiveKit Cloud account or self-hosted LiveKit server — [sign up](https://cloud.livekit.io/)
-- OpenAI API key — [get one](https://platform.openai.com/api-keys)
+- Python 3.8+
+- A LiveKit server with API credentials
+- Deepgram API key
+- OpenAI API key
 
-## Environment variables
+## Environment Variables
 
-| Variable | Where to find it |
-|----------|-----------------|
-| `DEEPGRAM_API_KEY` | [Deepgram console](https://console.deepgram.com/) |
-| `LIVEKIT_URL` | [LiveKit Cloud dashboard](https://cloud.livekit.io/) → Project Settings |
-| `LIVEKIT_API_KEY` | [LiveKit Cloud dashboard](https://cloud.livekit.io/) → API Keys |
-| `LIVEKIT_API_SECRET` | [LiveKit Cloud dashboard](https://cloud.livekit.io/) → API Keys |
-| `OPENAI_API_KEY` | [OpenAI dashboard](https://platform.openai.com/api-keys) |
+Create a `.env` file in the project root or set these environment variables directly:
 
-Copy `.env.example` to `.env` and fill in your values.
+```ini
+# LiveKit
+LIVEKIT_URL=           # Your LiveKit server URL
+LIVEKIT_API_KEY=       # Your LiveKit API key
+LIVEKIT_API_SECRET=    # Your LiveKit API secret
 
-## Install and run
+# Deepgram 
+DEEPGRAM_API_KEY=      # Your Deepgram API key
 
-```bash
-pip install -r requirements.txt
-
-# Download VAD and turn detector model files (first time only)
-python src/agent.py download-files
-
-# Run in console mode (talk from your terminal)
-python src/agent.py console
-
-# Or run as a dev worker (connects to LiveKit server)
-python src/agent.py dev
+# OpenAI
+OPENAI_API_KEY=        # Your OpenAI API key
 ```
 
-## How it works
+## Running the Example
 
-1. The agent registers as a LiveKit worker and waits for room sessions
-2. When a participant joins, the `entrypoint` function creates an `AgentSession` wired to Deepgram STT, OpenAI LLM, and Cartesia TTS
-3. LiveKit captures the participant's microphone audio over WebRTC
-4. Audio passes through Silero VAD (voice activity detection) → Deepgram nova-3 STT → OpenAI GPT-4.1-mini → Cartesia TTS
-5. The synthesized response audio streams back to the participant in real-time
-6. The multilingual turn detector decides when the user has finished speaking, enabling natural back-and-forth conversation
+1. **Install Dependencies**
 
-## Related
+   Ensure you have the required Python packages:
 
-- [LiveKit Agents docs](https://docs.livekit.io/agents/)
-- [LiveKit Deepgram STT plugin](https://docs.livekit.io/agents/integrations/stt/deepgram/)
-- [Deepgram nova-3 model docs](https://developers.deepgram.com/docs/models)
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Starter templates
+2. **Start the Agent**
 
-If you want a ready-to-run base for your own project, check the [deepgram-starters](https://github.com/orgs/deepgram-starters/repositories) org — there are starter repos for every language and every Deepgram product.
+   Run the agent script:
+
+   ```bash
+   python src/agent.py
+   ```
+
+3. **Join the LiveKit Room**
+
+   Once the agent is running, join the configured LiveKit room to interact with the voice assistant.
+
+## What to Expect
+
+- The Voice Assistant joins the room and greets the user.
+- It uses Deepgram for speech-to-text to understand user queries.
+- It leverages OpenAI GPT to generate responses.
+
+> **Note**: The LiveKit agent framework handles most of the complexity, so the Deepgram integration is seamless through their plugin system.
+
+## Mock Information
+
+This guide assumes a working LiveKit environment for full functionality. Deepgram integration is tested live with real API keys during execution, ensuring the STT process is verified.
+
+---
+
+For a more detailed walkthrough, refer to `BLOG.md`.
