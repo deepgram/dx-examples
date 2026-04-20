@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agora + Deepgram Live Transcription</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; display: flex; flex-direction: column; }
+    header { padding: 1rem 1.5rem; background: #111; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    header h1 { font-size: 1.1rem; font-weight: 600; }
+    .badge { background: #099dfd; color: #fff; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .controls { display: flex; gap: 0.5rem; align-items: center; margin-left: auto; }
+    input[type="text"] { padding: 0.4rem 0.6rem; border: 1px solid #333; border-radius: 6px; background: #1a1a1a; color: #e0e0e0; font-size: 0.85rem; width: 160px; }
+    button { padding: 0.5rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: background 0.15s; }
+    #btn-join { background: #1db954; color: #fff; }
+    #btn-join:hover { background: #1ed760; }
+    #btn-join:disabled { background: #333; color: #666; cursor: default; }
+    #btn-leave { background: #e53935; color: #fff; }
+    #btn-leave:hover { background: #ef5350; }
+    #btn-leave:disabled { background: #333; color: #666; cursor: default; }
+    .status { font-size: 0.8rem; color: #888; padding: 0.3rem 0.8rem; }
+    .main { display: flex; flex: 1; overflow: hidden; }
+    .video-area { flex: 2; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+    #remote-players { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 1rem; width: 100%; height: 100%; align-content: flex-start; }
+    #remote-players .player { width: 320px; height: 240px; background: #1a1a1a; border-radius: 8px; overflow: hidden; position: relative; }
+    #remote-players .player-label { position: absolute; bottom: 0.4rem; left: 0.5rem; font-size: 0.7rem; color: #fff; background: rgba(0,0,0,0.6); padding: 0.15rem 0.4rem; border-radius: 3px; }
+    .caption-overlay { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); max-width: 80%; background: rgba(0,0,0,0.75); padding: 0.6rem 1rem; border-radius: 8px; font-size: 1rem; line-height: 1.5; text-align: center; pointer-events: none; min-height: 2rem; }
+    .caption-overlay .interim { color: #aaa; }
+    .caption-overlay .final { color: #fff; }
+    .caption-overlay .speaker { color: #099dfd; font-weight: 600; margin-right: 0.3rem; }
+    .transcript-panel { flex: 1; min-width: 280px; max-width: 360px; background: #111; border-left: 1px solid #222; display: flex; flex-direction: column; }
+    .transcript-panel h2 { padding: 0.8rem 1rem; font-size: 0.9rem; border-bottom: 1px solid #222; }
+    #transcript-log { flex: 1; overflow-y: auto; padding: 0.8rem 1rem; font-size: 0.85rem; line-height: 1.6; }
+    #transcript-log .entry { margin-bottom: 0.4rem; }
+    #transcript-log .entry .spk { color: #099dfd; font-weight: 600; }
+    .placeholder { color: #555; text-align: center; padding: 3rem 1rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agora + Deepgram</h1>
+    <span class="badge">Live STT</span>
+    <span id="status" class="status">Ready</span>
+    <div class="controls">
+      <input type="text" id="channel-input" placeholder="Channel name" value="test-channel" />
+      <button id="btn-join">Join Channel</button>
+      <button id="btn-leave" disabled>Leave</button>
+    </div>
+  </header>
+  <div class="main">
+    <div class="video-area">
+      <div id="remote-players">
+        <div class="placeholder" id="video-placeholder">Join an Agora channel to begin real-time transcription</div>
+      </div>
+      <div class="caption-overlay" id="captions"></div>
+    </div>
+    <div class="transcript-panel">
+      <h2>Transcript</h2>
+      <div id="transcript-log"></div>
+    </div>
+  </div>
+
+  <!-- Agora Web SDK — handles WebRTC for audio/video channels -->
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.22.0.js"></script>
+  <script>
+    var btnJoin = document.getElementById('btn-join');
+    var btnLeave = document.getElementById('btn-leave');
+    var statusEl = document.getElementById('status');
+    var captionsEl = document.getElementById('captions');
+    var logEl = document.getElementById('transcript-log');
+    var channelInput = document.getElementById('channel-input');
+    var remotePlayers = document.getElementById('remote-players');
+    var placeholder = document.getElementById('video-placeholder');
+
+    var agoraClient = null;
+    var localAudioTrack = null;
+    var ws = null;
+    var audioContext = null;
+    var processor = null;
+
+    function setStatus(text) { statusEl.textContent = text; }
+
+    function addLogEntry(text, speaker) {
+      var div = document.createElement('div');
+      div.className = 'entry';
+      if (speaker !== null && speaker !== undefined) {
+        div.innerHTML = '<span class="spk">Speaker ' + speaker + ':</span> ' + text;
+      } else {
+        div.textContent = text;
+      }
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateCaption(text, isFinal, speaker) {
+      var spk = (speaker !== null && speaker !== undefined) ? '<span class="speaker">S' + speaker + '</span>' : '';
+      var cls = isFinal ? 'final' : 'interim';
+      captionsEl.innerHTML = spk + '<span class="' + cls + '">' + text + '</span>';
+    }
+
+    function connectTranscription() {
+      var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(protocol + '://' + location.host + '/transcribe');
+
+      ws.onopen = function() { setStatus('Transcribing...'); };
+      ws.onclose = function() { setStatus('Transcription stopped'); };
+      ws.onerror = function() { setStatus('WebSocket error'); };
+
+      ws.onmessage = function(evt) {
+        var data = JSON.parse(evt.data);
+        updateCaption(data.transcript, data.is_final, data.speaker);
+        if (data.is_final) {
+          addLogEntry(data.transcript, data.speaker);
+        }
+      };
+    }
+
+    // Capture local mic track, downsample to 16 kHz, convert float32 to
+    // signed 16-bit PCM, and send binary frames to the server WebSocket.
+    function startAudioCapture() {
+      var stream = new MediaStream([localAudioTrack.getMediaStreamTrack()]);
+      audioContext = new AudioContext({ sampleRate: 16000 });
+      var source = audioContext.createMediaStreamSource(stream);
+
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = function(e) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        var float32 = e.inputBuffer.getChannelData(0);
+        var int16 = new Int16Array(float32.length);
+        for (var i = 0; i < float32.length; i++) {
+          var s = Math.max(-1, Math.min(1, float32[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        ws.send(int16.buffer);
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+    }
+
+    function stopAudioCapture() {
+      if (processor) { processor.disconnect(); processor = null; }
+      if (audioContext) { audioContext.close(); audioContext = null; }
+    }
+
+    btnJoin.addEventListener('click', async function() {
+      var channel = channelInput.value.trim();
+      if (!channel) { setStatus('Enter a channel name'); return; }
+
+      btnJoin.disabled = true;
+      setStatus('Fetching token...');
+
+      try {
+        var tokenRes = await fetch('/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: channel, uid: 0 }),
+        });
+        if (!tokenRes.ok) throw new Error('Token request failed');
+        var tokenData = await tokenRes.json();
+
+        setStatus('Joining channel...');
+        placeholder.style.display = 'none';
+
+        agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+
+        agoraClient.on('user-published', async function(user, mediaType) {
+          await agoraClient.subscribe(user, mediaType);
+          if (mediaType === 'video') {
+            var playerDiv = document.createElement('div');
+            playerDiv.className = 'player';
+            playerDiv.id = 'player-' + user.uid;
+            playerDiv.innerHTML = '<span class="player-label">User ' + user.uid + '</span>';
+            remotePlayers.appendChild(playerDiv);
+            user.videoTrack.play(playerDiv);
+          }
+          if (mediaType === 'audio') {
+            user.audioTrack.play();
+          }
+        });
+
+        agoraClient.on('user-unpublished', function(user, mediaType) {
+          if (mediaType === 'video') {
+            var el = document.getElementById('player-' + user.uid);
+            if (el) el.remove();
+          }
+        });
+
+        agoraClient.on('user-left', function(user) {
+          var el = document.getElementById('player-' + user.uid);
+          if (el) el.remove();
+        });
+
+        await agoraClient.join(tokenData.appId, channel, tokenData.token, tokenData.uid || null);
+
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        await agoraClient.publish([localAudioTrack]);
+
+        setStatus('In channel — starting transcription...');
+
+        connectTranscription();
+        startAudioCapture();
+
+        btnLeave.disabled = false;
+      } catch (err) {
+        setStatus('Error: ' + err.message);
+        btnJoin.disabled = false;
+      }
+    });
+
+    btnLeave.addEventListener('click', async function() {
+      btnLeave.disabled = true;
+      setStatus('Leaving...');
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'stop' }));
+        ws.close();
+        ws = null;
+      }
+
+      stopAudioCapture();
+
+      if (localAudioTrack) {
+        localAudioTrack.close();
+        localAudioTrack = null;
+      }
+
+      if (agoraClient) {
+        await agoraClient.leave();
+        agoraClient = null;
+      }
+
+      remotePlayers.querySelectorAll('.player').forEach(function(el) { el.remove(); });
+      placeholder.style.display = '';
+      captionsEl.innerHTML = '';
+      setStatus('Ready');
+      btnJoin.disabled = false;
+    });
+  </script>
+</body>
+</html>
