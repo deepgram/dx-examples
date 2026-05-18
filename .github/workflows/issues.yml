@@ -125,7 +125,7 @@ jobs:
 
       - name: Handle issue
         if: steps.issue.outputs.skip != 'true'
-        uses: anthropics/claude-code-action@39431830520a7ae6c0c572f11a7707e7043325e3 # v1.0.95
+        uses: anthropics/claude-code-action@9db782c3a17ef2bfc274cd17411bc3e0a5ba1345 # v1.0.115
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
